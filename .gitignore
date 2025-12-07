@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Data folders (keep structure, ignore contents)
+input/*.pdf
+input/Processed/
+output/*.csv
+reports/*.csv
+
+# OS
+.DS_Store
+Thumbs.db
