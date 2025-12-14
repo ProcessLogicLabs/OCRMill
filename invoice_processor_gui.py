@@ -3,7 +3,7 @@ OCRMill - Invoice Processing Suite
 Unified GUI application for invoice processing and parts database management.
 """
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
@@ -12,10 +12,24 @@ import queue
 import time
 import csv
 import os
+import sys
 import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List
+
+# Add DerivativeMill submodule to path for invoice_processor import
+DERIVATIVEMILL_PATH = Path(__file__).parent / "DerivativeMill" / "DerivativeMill"
+if DERIVATIVEMILL_PATH.exists():
+    sys.path.insert(0, str(DERIVATIVEMILL_PATH))
+
+# Try to import the invoice processor from DerivativeMill
+try:
+    from invoice_processor import InvoiceProcessor
+    HAS_INVOICE_PROCESSOR = True
+except ImportError:
+    HAS_INVOICE_PROCESSOR = False
+    InvoiceProcessor = None
 
 try:
     import pdfplumber
@@ -683,6 +697,11 @@ class OCRMillApp:
         self.main_notebook.add(self.parts_frame, text="Parts Database")
         self._create_parts_database_tab()
 
+        # === CBP Export Tab ===
+        self.cbp_frame = ttk.Frame(self.main_notebook)
+        self.main_notebook.add(self.cbp_frame, text="CBP Export")
+        self._create_cbp_export_tab()
+
     def _create_invoice_processing_tab(self):
         """Create the invoice processing tab content."""
         self.invoice_frame.grid_columnconfigure(0, weight=1)
@@ -1064,6 +1083,296 @@ To add a new template:
 
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
+
+    def _create_cbp_export_tab(self):
+        """Create the CBP Export tab for Section 232 processing."""
+        self.cbp_frame.grid_columnconfigure(0, weight=1)
+        self.cbp_frame.grid_rowconfigure(2, weight=1)
+
+        # === Header Frame ===
+        header_frame = ttk.Frame(self.cbp_frame, padding="10")
+        header_frame.grid(row=0, column=0, sticky="ew")
+
+        ttk.Label(header_frame, text="CBP Export - Section 232 Processing",
+                  font=('Helvetica', 14, 'bold')).pack(side=tk.LEFT)
+
+        # Status indicator
+        self.cbp_status_label = ttk.Label(header_frame, text="", font=('Helvetica', 10))
+        self.cbp_status_label.pack(side=tk.RIGHT, padx=10)
+
+        if not HAS_INVOICE_PROCESSOR:
+            self.cbp_status_label.config(text="Invoice Processor not available", foreground="red")
+
+        # === Settings Frame ===
+        settings_frame = ttk.LabelFrame(self.cbp_frame, text="Export Settings", padding="10")
+        settings_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        settings_frame.grid_columnconfigure(1, weight=1)
+
+        # Input folder (processed CSVs)
+        ttk.Label(settings_frame, text="Input Folder:").grid(row=0, column=0, sticky="w", pady=2)
+        self.cbp_input_var = tk.StringVar(value=str(Path(self.config.output_folder) / "Processed"))
+        ttk.Entry(settings_frame, textvariable=self.cbp_input_var, width=50).grid(row=0, column=1, sticky="ew", padx=5)
+        ttk.Button(settings_frame, text="Browse...", command=self._browse_cbp_input).grid(row=0, column=2)
+
+        # Output folder for CBP Excel files
+        ttk.Label(settings_frame, text="Output Folder:").grid(row=1, column=0, sticky="w", pady=2)
+        self.cbp_output_var = tk.StringVar(value=str(Path(self.config.output_folder) / "CBP_Export"))
+        ttk.Entry(settings_frame, textvariable=self.cbp_output_var, width=50).grid(row=1, column=1, sticky="ew", padx=5)
+        ttk.Button(settings_frame, text="Browse...", command=self._browse_cbp_output).grid(row=1, column=2)
+
+        # Net weight input
+        ttk.Label(settings_frame, text="Net Weight (kg):").grid(row=2, column=0, sticky="w", pady=2)
+        self.cbp_weight_var = tk.StringVar(value="0")
+        ttk.Entry(settings_frame, textvariable=self.cbp_weight_var, width=15).grid(row=2, column=1, sticky="w", padx=5)
+
+        # Buttons frame
+        btn_frame = ttk.Frame(settings_frame)
+        btn_frame.grid(row=3, column=0, columnspan=3, pady=10)
+
+        self.cbp_process_btn = ttk.Button(btn_frame, text="Process Selected CSV",
+                                          command=self._process_cbp_single, width=20)
+        self.cbp_process_btn.pack(side=tk.LEFT, padx=5)
+
+        self.cbp_process_all_btn = ttk.Button(btn_frame, text="Process All CSVs",
+                                               command=self._process_cbp_all, width=20)
+        self.cbp_process_all_btn.pack(side=tk.LEFT, padx=5)
+
+        if not HAS_INVOICE_PROCESSOR:
+            self.cbp_process_btn.config(state='disabled')
+            self.cbp_process_all_btn.config(state='disabled')
+
+        # === File List Frame ===
+        list_frame = ttk.LabelFrame(self.cbp_frame, text="Available CSV Files", padding="5")
+        list_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+        list_frame.grid_columnconfigure(0, weight=1)
+        list_frame.grid_rowconfigure(0, weight=1)
+
+        # Treeview for CSV files
+        columns = ("filename", "date", "invoices", "items", "status")
+        self.cbp_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=10)
+
+        self.cbp_tree.heading("filename", text="Filename")
+        self.cbp_tree.heading("date", text="Date")
+        self.cbp_tree.heading("invoices", text="Invoices")
+        self.cbp_tree.heading("items", text="Items")
+        self.cbp_tree.heading("status", text="Status")
+
+        self.cbp_tree.column("filename", width=300)
+        self.cbp_tree.column("date", width=100)
+        self.cbp_tree.column("invoices", width=80)
+        self.cbp_tree.column("items", width=80)
+        self.cbp_tree.column("status", width=100)
+
+        vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.cbp_tree.yview)
+        self.cbp_tree.configure(yscrollcommand=vsb.set)
+
+        self.cbp_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+
+        # Refresh button
+        ttk.Button(list_frame, text="Refresh List", command=self._refresh_cbp_list).grid(row=1, column=0, pady=5)
+
+        # === Log Frame ===
+        log_frame = ttk.LabelFrame(self.cbp_frame, text="Processing Log", padding="5")
+        log_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
+        log_frame.grid_columnconfigure(0, weight=1)
+
+        self.cbp_log_text = scrolledtext.ScrolledText(log_frame, state='disabled', font=('Consolas', 9), height=6)
+        self.cbp_log_text.pack(fill="x", expand=False)
+
+        # Initial refresh
+        self.root.after(500, self._refresh_cbp_list)
+
+    def _browse_cbp_input(self):
+        """Browse for CBP input folder."""
+        folder = filedialog.askdirectory(initialdir=self.cbp_input_var.get())
+        if folder:
+            self.cbp_input_var.set(folder)
+            self._refresh_cbp_list()
+
+    def _browse_cbp_output(self):
+        """Browse for CBP output folder."""
+        folder = filedialog.askdirectory(initialdir=self.cbp_output_var.get())
+        if folder:
+            self.cbp_output_var.set(folder)
+
+    def _refresh_cbp_list(self):
+        """Refresh the list of available CSV files."""
+        # Clear existing items
+        for item in self.cbp_tree.get_children():
+            self.cbp_tree.delete(item)
+
+        input_folder = Path(self.cbp_input_var.get())
+        if not input_folder.exists():
+            return
+
+        # Find all CSV files
+        csv_files = sorted(input_folder.glob("*.csv"), key=lambda x: x.stat().st_mtime, reverse=True)
+
+        for csv_file in csv_files:
+            try:
+                # Read CSV to get info
+                with open(csv_file, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    rows = list(reader)
+
+                item_count = len(rows)
+                invoice_set = set()
+                for row in rows:
+                    if 'invoice_number' in row:
+                        invoice_set.add(row['invoice_number'])
+
+                invoice_count = len(invoice_set) if invoice_set else 1
+
+                # Check if already processed
+                output_folder = Path(self.cbp_output_var.get())
+                output_file = output_folder / f"{csv_file.stem}_CBP.xlsx"
+                status = "Exported" if output_file.exists() else "Pending"
+
+                # Get modification date
+                mod_time = datetime.fromtimestamp(csv_file.stat().st_mtime).strftime("%Y-%m-%d")
+
+                self.cbp_tree.insert("", "end", values=(
+                    csv_file.name,
+                    mod_time,
+                    invoice_count,
+                    item_count,
+                    status
+                ))
+            except Exception as e:
+                self.cbp_tree.insert("", "end", values=(csv_file.name, "", "", "", f"Error: {e}"))
+
+    def _cbp_log(self, message: str):
+        """Log a message to the CBP log."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.cbp_log_text.configure(state='normal')
+        self.cbp_log_text.insert(tk.END, f"[{timestamp}] {message}\n")
+        self.cbp_log_text.see(tk.END)
+        self.cbp_log_text.configure(state='disabled')
+
+    def _process_cbp_single(self):
+        """Process selected CSV file through invoice processor."""
+        if not HAS_INVOICE_PROCESSOR:
+            messagebox.showerror("Error", "Invoice Processor module not available.\nCheck DerivativeMill submodule.")
+            return
+
+        selection = self.cbp_tree.selection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a CSV file to process.")
+            return
+
+        item = self.cbp_tree.item(selection[0])
+        filename = item['values'][0]
+        input_path = Path(self.cbp_input_var.get()) / filename
+
+        self._process_cbp_file(input_path)
+
+    def _process_cbp_all(self):
+        """Process all pending CSV files."""
+        if not HAS_INVOICE_PROCESSOR:
+            messagebox.showerror("Error", "Invoice Processor module not available.\nCheck DerivativeMill submodule.")
+            return
+
+        input_folder = Path(self.cbp_input_var.get())
+        output_folder = Path(self.cbp_output_var.get())
+
+        csv_files = list(input_folder.glob("*.csv"))
+        pending_files = []
+
+        for csv_file in csv_files:
+            output_file = output_folder / f"{csv_file.stem}_CBP.xlsx"
+            if not output_file.exists():
+                pending_files.append(csv_file)
+
+        if not pending_files:
+            messagebox.showinfo("All Done", "All CSV files have already been exported.")
+            return
+
+        if not messagebox.askyesno("Process All",
+                                   f"Process {len(pending_files)} pending CSV file(s)?"):
+            return
+
+        for csv_file in pending_files:
+            self._process_cbp_file(csv_file)
+
+        self._refresh_cbp_list()
+
+    def _process_cbp_file(self, csv_path: Path):
+        """Process a single CSV file through the invoice processor."""
+        import pandas as pd
+
+        try:
+            self._cbp_log(f"Processing: {csv_path.name}")
+
+            # Read the CSV
+            df = pd.read_csv(csv_path)
+            self._cbp_log(f"  Loaded {len(df)} rows")
+
+            # Get net weight from input or from CSV if available
+            try:
+                net_weight = float(self.cbp_weight_var.get())
+            except ValueError:
+                net_weight = 0.0
+
+            # If net weight column exists in CSV, sum it
+            if net_weight == 0 and 'net_weight' in df.columns:
+                net_weight = df['net_weight'].sum()
+                self._cbp_log(f"  Using net weight from CSV: {net_weight:.2f} kg")
+
+            # Map OCRMill columns to invoice_processor expected columns
+            column_mapping = {
+                'part_number': 'part_number',
+                'total_price': 'value_usd',
+                'hts_code': 'hts_code',
+                'quantity': 'quantity',
+                'steel_percentage': 'steel_ratio',
+                'aluminum_percentage': 'aluminum_ratio',
+                'invoice_number': 'invoice_number',
+                'project_number': 'project_number',
+                'mid': 'mid'
+            }
+
+            # Rename columns if they exist
+            for old_col, new_col in column_mapping.items():
+                if old_col in df.columns and old_col != new_col:
+                    df = df.rename(columns={old_col: new_col})
+
+            # Get MID from first row if available
+            mid = df['mid'].iloc[0] if 'mid' in df.columns and len(df) > 0 else ""
+
+            # Initialize processor - try database first, fall back to empty
+            db_path = DERIVATIVEMILL_PATH / "Resources" / "derivativemill.db"
+            if db_path.exists():
+                processor = InvoiceProcessor.from_database(str(db_path))
+                self._cbp_log(f"  Using tariff database: {db_path.name}")
+            else:
+                processor = InvoiceProcessor.from_dict({})
+                self._cbp_log(f"  No tariff database found, using empty lookup")
+
+            # Process the invoice data
+            result = processor.process(df, net_weight=net_weight, mid=mid)
+
+            self._cbp_log(f"  Original rows: {result.original_row_count}")
+            self._cbp_log(f"  Expanded rows: {result.expanded_row_count}")
+            self._cbp_log(f"  Total value: ${result.total_value:,.2f}")
+
+            # Create output folder if needed
+            output_folder = Path(self.cbp_output_var.get())
+            output_folder.mkdir(parents=True, exist_ok=True)
+
+            # Export to Excel
+            output_path = output_folder / f"{csv_path.stem}_CBP.xlsx"
+            export_result = processor.export(result.data, str(output_path))
+
+            self._cbp_log(f"  Exported to: {output_path.name}")
+            self._cbp_log(f"  Success!")
+
+            self._refresh_cbp_list()
+
+        except Exception as e:
+            self._cbp_log(f"  ERROR: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _setup_drag_drop(self):
         """Set up drag-and-drop handlers for HTS files."""
