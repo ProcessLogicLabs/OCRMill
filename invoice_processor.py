@@ -7,7 +7,7 @@ Designed for mmcité invoices with format:
 type / description | Project | Qty | Price | VAT (%) | Price after taxes
 """
 
-__version__ = "1.3.1"
+__version__ = "2.0.0"
 
 import os
 import re

@@ -1,0 +1,16 @@
+# OCRMill Dependencies
+# Install with: pip install -r requirements.txt
+
+# PDF Processing
+pdfplumber>=0.11.0
+
+# GUI and System Tray
+pillow>=12.0.0
+pystray>=0.19.0
+tkinterdnd2>=0.4.0
+
+# Data Processing and Excel
+pandas>=2.3.0
+openpyxl>=3.1.0
+
+# Note: tkinter comes with Python standard library

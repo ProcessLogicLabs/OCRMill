@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCRMill - Invoice Processing Flowchart v2.2</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .flowchart {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .stage-label {
+            background: #0f3460;
+            color: #00d4ff;
+            padding: 5px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border: 1px solid #00d4ff;
+        }
+
+        .node {
+            background: linear-gradient(145deg, #1e3a5f, #16213e);
+            border: 2px solid #0f4c75;
+            border-radius: 12px;
+            padding: 15px 25px;
+            min-width: 280px;
+            max-width: 350px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .node:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.2);
+            border-color: #00d4ff;
+        }
+
+        .node-title {
+            font-weight: bold;
+            color: #00d4ff;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .node-desc {
+            font-size: 12px;
+            color: #b8b8b8;
+            line-height: 1.4;
+        }
+
+        .node-file {
+            font-size: 10px;
+            color: #666;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        /* Special node types */
+        .node.input {
+            background: linear-gradient(145deg, #2d5016, #1a3009);
+            border-color: #4caf50;
+        }
+        .node.input .node-title { color: #81c784; }
+
+        .node.process {
+            background: linear-gradient(145deg, #1e3a5f, #16213e);
+            border-color: #2196f3;
+        }
+        .node.process .node-title { color: #64b5f6; }
+
+        .node.decision {
+            background: linear-gradient(145deg, #5c3d1e, #3d2912);
+            border-color: #ff9800;
+            transform: rotate(0deg);
+        }
+        .node.decision .node-title { color: #ffb74d; }
+
+        .node.output {
+            background: linear-gradient(145deg, #4a1942, #2d1028);
+            border-color: #e91e63;
+        }
+        .node.output .node-title { color: #f48fb1; }
+
+        .node.database {
+            background: linear-gradient(145deg, #1a4a4a, #0d2d2d);
+            border-color: #009688;
+            border-radius: 12px 12px 30px 30px;
+        }
+        .node.database .node-title { color: #4db6ac; }
+
+        .node.template {
+            background: linear-gradient(145deg, #3d1a5c, #261038);
+            border-color: #9c27b0;
+        }
+        .node.template .node-title { color: #ce93d8; }
+
+        .node.gui {
+            background: linear-gradient(145deg, #1a3d5c, #0d2538);
+            border-color: #03a9f4;
+        }
+        .node.gui .node-title { color: #4fc3f7; }
+
+        /* Arrows */
+        .arrow {
+            width: 2px;
+            height: 30px;
+            background: linear-gradient(to bottom, #00d4ff, #0088cc);
+            position: relative;
+        }
+
+        .arrow::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 10px solid #0088cc;
+        }
+
+        .arrow.short {
+            height: 20px;
+        }
+
+        /* Parallel branches */
+        .parallel-container {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .branch {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .branch-label {
+            font-size: 11px;
+            color: #888;
+            background: #1a1a2e;
+            padding: 3px 10px;
+            border-radius: 10px;
+            border: 1px solid #333;
+        }
+
+        /* Horizontal connector */
+        .horizontal-line {
+            height: 2px;
+            background: #00d4ff;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .merge-point {
+            width: 20px;
+            height: 20px;
+            background: #00d4ff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        /* Detail boxes */
+        .detail-box {
+            background: rgba(15, 52, 96, 0.5);
+            border: 1px dashed #0f4c75;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 11px;
+            text-align: left;
+            max-width: 320px;
+        }
+
+        .detail-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .detail-box li {
+            padding: 3px 0;
+            color: #999;
+        }
+
+        .detail-box li::before {
+            content: '>';
+            color: #00d4ff;
+            margin-right: 8px;
+        }
+
+        /* Section dividers */
+        .section-divider {
+            width: 100%;
+            max-width: 800px;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #0f4c75, transparent);
+            margin: 20px 0;
+        }
+
+        /* Legend */
+        .legend {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(22, 33, 62, 0.95);
+            border: 1px solid #0f4c75;
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 11px;
+            z-index: 100;
+        }
+
+        .legend h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .legend-color.input { background: #4caf50; }
+        .legend-color.process { background: #2196f3; }
+        .legend-color.decision { background: #ff9800; }
+        .legend-color.output { background: #e91e63; }
+        .legend-color.database { background: #009688; }
+        .legend-color.template { background: #9c27b0; }
+        .legend-color.gui { background: #03a9f4; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .parallel-container {
+                flex-direction: column;
+                gap: 20px;
+            }
+            .legend {
+                position: static;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>OCRMill Invoice Processing System v2.2</h1>
+    <p class="subtitle">Unified GUI Application - Complete Data Flow from PDF Input to CSV Output</p>
+
+    <div class="legend">
+        <h3>Legend</h3>
+        <div class="legend-item"><div class="legend-color input"></div> Input</div>
+        <div class="legend-item"><div class="legend-color gui"></div> GUI Component</div>
+        <div class="legend-item"><div class="legend-color process"></div> Process</div>
+        <div class="legend-item"><div class="legend-color decision"></div> Decision</div>
+        <div class="legend-item"><div class="legend-color output"></div> Output</div>
+        <div class="legend-item"><div class="legend-color database"></div> Database</div>
+        <div class="legend-item"><div class="legend-color template"></div> Template</div>
+    </div>
+
+    <div class="flowchart">
+
+        <!-- Stage 0: GUI Application -->
+        <div class="stage">
+            <div class="stage-label">UNIFIED GUI APPLICATION</div>
+            <div class="node gui">
+                <div class="node-title">OCRMill Application v2.2</div>
+                <div class="node-desc">Single unified interface with tabbed navigation</div>
+                <div class="node-file">invoice_processor_gui.py: OCRMillApp</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>Invoice Processing Tab</li>
+                        <li>Parts Database Tab</li>
+                        <li>Unified menu bar and status</li>
+                        <li>Optional tkinterdnd2 drag-drop</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 1: Input Methods -->
+        <div class="stage">
+            <div class="stage-label">STAGE 1: PDF INPUT METHODS</div>
+            <div class="parallel-container">
+                <div class="branch">
+                    <div class="branch-label">Drag & Drop</div>
+                    <div class="node input">
+                        <div class="node-title">Drop Zone</div>
+                        <div class="node-desc">Drag PDF files onto GUI drop zone</div>
+                        <div class="detail-box">
+                            <ul>
+                                <li>Visual feedback on drag</li>
+                                <li>Copies to input folder</li>
+                                <li>Prompts to process now</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="branch">
+                    <div class="branch-label">Browse</div>
+                    <div class="node input">
+                        <div class="node-title">File Browser</div>
+                        <div class="node-desc">Click drop zone to browse for PDFs</div>
+                        <div class="node-file">_browse_pdf_files()</div>
+                    </div>
+                </div>
+                <div class="branch">
+                    <div class="branch-label">Folder Watch</div>
+                    <div class="node input">
+                        <div class="node-title">Input Folder</div>
+                        <div class="node-desc">Place PDFs directly in input folder</div>
+                        <div class="node-file">Folder: ./input/</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 2: Processing Trigger -->
+        <div class="stage">
+            <div class="stage-label">STAGE 2: PROCESSING TRIGGER</div>
+            <div class="parallel-container">
+                <div class="branch">
+                    <div class="branch-label">Manual</div>
+                    <div class="node gui">
+                        <div class="node-title">Process Now Button</div>
+                        <div class="node-desc">Immediate one-time processing</div>
+                        <div class="node-file">process_now()</div>
+                    </div>
+                </div>
+                <div class="branch">
+                    <div class="branch-label">Automatic</div>
+                    <div class="node process">
+                        <div class="node-title">Background Monitor</div>
+                        <div class="node-desc">Auto-poll at configurable interval</div>
+                        <div class="node-file">_processing_loop()</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow short"></div>
+
+        <div class="stage">
+            <div class="node decision">
+                <div class="node-title">Processing Lock</div>
+                <div class="node-desc">Thread-safe mutex prevents concurrent processing</div>
+                <div class="node-file">threading.Lock()</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>Only one process at a time</li>
+                        <li>Prevents race conditions</li>
+                        <li>Manual waits if background running</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 3: Text Extraction -->
+        <div class="stage">
+            <div class="stage-label">STAGE 3: TEXT EXTRACTION</div>
+            <div class="node process">
+                <div class="node-title">Extract PDF Text</div>
+                <div class="node-desc">Use pdfplumber to extract text from all pages</div>
+                <div class="node-file">Library: pdfplumber</div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 4: Template Selection -->
+        <div class="stage">
+            <div class="stage-label">STAGE 4: TEMPLATE SELECTION</div>
+            <div class="node decision">
+                <div class="node-title">Match Template</div>
+                <div class="node-desc">Evaluate each template's confidence score based on text patterns</div>
+                <div class="node-file">get_best_template()</div>
+            </div>
+        </div>
+
+        <div class="arrow short"></div>
+
+        <div class="parallel-container">
+            <div class="branch">
+                <div class="branch-label">Czech Invoice</div>
+                <div class="node template">
+                    <div class="node-title">mmcite_czech</div>
+                    <div class="node-desc">CZK/USD pricing, variable symbol, material composition</div>
+                    <div class="detail-box">
+                        <ul>
+                            <li>Detects "CZK" currency</li>
+                            <li>Looks for "variable symbol"</li>
+                            <li>Returns "MMCITE AS" for MID</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="branch">
+                <div class="branch-label">Brazilian Invoice</div>
+                <div class="node template">
+                    <div class="node-title">mmcite_brazilian</div>
+                    <div class="node-desc">NCM/HTS codes, USD pricing, Brazil markers</div>
+                    <div class="detail-box">
+                        <ul>
+                            <li>Detects 8-digit NCM codes</li>
+                            <li>HTS format: NNNN.NN.NNNN</li>
+                            <li>Returns "MMCITE BRAZIL" for MID</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 5: Validation -->
+        <div class="stage">
+            <div class="stage-label">STAGE 5: DOCUMENT VALIDATION</div>
+            <div class="node decision">
+                <div class="node-title">Packing List Check</div>
+                <div class="node-desc">Skip if ONLY packing list (no invoice markers). Process if mixed.</div>
+                <div class="node-file">is_packing_list()</div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 6: Multi-Invoice Detection -->
+        <div class="stage">
+            <div class="stage-label">STAGE 6: MULTI-INVOICE HANDLING</div>
+            <div class="node process">
+                <div class="node-title">Page-by-Page Scan</div>
+                <div class="node-desc">Detect invoice number changes across pages. Buffer pages per invoice.</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>Extract Invoice #: "Invoice n.: 2025201714"</li>
+                        <li>Extract Project #: "Project n.: US25A0196"</li>
+                        <li>Buffer pages until invoice changes</li>
+                        <li>Tag items with invoice/project</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 7: Data Extraction -->
+        <div class="stage">
+            <div class="stage-label">STAGE 7: LINE ITEM EXTRACTION</div>
+            <div class="node process">
+                <div class="node-title">Extract Line Items</div>
+                <div class="node-desc">Parse part numbers, quantities, prices using regex patterns</div>
+                <div class="node-file">extract_line_items()</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>Part Number (e.g., SL505, LPU151-J02000)</li>
+                        <li>Quantity (normalized decimals)</li>
+                        <li>Total Price (USD)</li>
+                        <li>Skip: CELKEM, SLU*, OBAL*</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 8: Material Data -->
+        <div class="stage">
+            <div class="node process">
+                <div class="node-title">Extract Material Composition</div>
+                <div class="node-desc">Look ahead in text for steel/aluminum percentages, weights, values</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>Steel: percentage, kg, $ value</li>
+                        <li>Aluminum: percentage, kg, $ value</li>
+                        <li>Net weight (kg)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 9: Manufacturer Detection -->
+        <div class="stage">
+            <div class="stage-label">STAGE 8: MANUFACTURER & MID LOOKUP</div>
+            <div class="node process">
+                <div class="node-title">Extract Manufacturer Name</div>
+                <div class="node-desc">Detect company name from invoice header (e.g., "mmcite")</div>
+                <div class="node-file">extract_manufacturer_name()</div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <div class="node database">
+            <div class="node-title">Manufacturers Table</div>
+            <div class="node-desc">Look up MID by company name (case-insensitive, accent-normalized)</div>
+            <div class="node-file">get_manufacturer_by_name()</div>
+            <div class="detail-box">
+                <ul>
+                    <li>MMCITE AS -> CZMMCAS907UHE</li>
+                    <li>MMCITE BRAZIL -> BRMMCIND5833SAN</li>
+                    <li>OUT SIDER AS -> DKOUTSID2300COP</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 10: Enrichment -->
+        <div class="stage">
+            <div class="stage-label">STAGE 9: DATA ENRICHMENT</div>
+            <div class="parallel-container">
+                <div class="branch">
+                    <div class="node process">
+                        <div class="node-title">Description Extraction</div>
+                        <div class="node-desc">Scan 3 lines below part number for description text</div>
+                        <div class="detail-box">
+                            <ul>
+                                <li>Extract text from invoice</li>
+                                <li>Skip material/price lines</li>
+                                <li>Fallback: prefix mapping</li>
+                                <li>SL* -> Seat, ND* -> Bollard</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="branch">
+                    <div class="node process">
+                        <div class="node-title">HTS Code Matching</div>
+                        <div class="node-desc">Find HTS code via fuzzy description matching</div>
+                        <div class="detail-box">
+                            <ul>
+                                <li>Seat -> 9403.20.0080</li>
+                                <li>Bollard -> 7308.90.6000</li>
+                                <li>Bench -> 9401.69.8031</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 11: Database Update -->
+        <div class="stage">
+            <div class="stage-label">STAGE 10: DATABASE UPDATE</div>
+            <div class="node database">
+                <div class="node-title">Parts Database</div>
+                <div class="node-desc">Store occurrence and update master aggregates</div>
+                <div class="node-file">Resources/parts_database.db</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>part_occurrences: each line item</li>
+                        <li>parts: master with totals/averages</li>
+                        <li>Track: qty, value, dates, projects</li>
+                        <li>Configurable DB location via Settings</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 12: CSV Output -->
+        <div class="stage">
+            <div class="stage-label">STAGE 11: CSV GENERATION</div>
+            <div class="node output">
+                <div class="node-title">Generate CSV Files</div>
+                <div class="node-desc">Create CSV per invoice (or consolidated per PDF based on config)</div>
+                <div class="node-file">Folder: ./output/</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>invoice_number, project_number</li>
+                        <li>part_number, description</li>
+                        <li>mid, hts_code</li>
+                        <li>quantity, total_price</li>
+                        <li>steel/aluminum data</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 13: File Management -->
+        <div class="stage">
+            <div class="stage-label">STAGE 12: FILE MANAGEMENT</div>
+            <div class="parallel-container">
+                <div class="branch">
+                    <div class="branch-label">Success</div>
+                    <div class="node input">
+                        <div class="node-title">Move to Processed</div>
+                        <div class="node-desc">PDF moved to input/Processed/</div>
+                    </div>
+                </div>
+                <div class="branch">
+                    <div class="branch-label">Failure</div>
+                    <div class="node output">
+                        <div class="node-title">Move to Failed</div>
+                        <div class="node-desc">PDF moved to input/Failed/ with reason</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow"></div>
+
+        <!-- Stage 14: Logging -->
+        <div class="stage">
+            <div class="stage-label">STAGE 13: ACTIVITY LOG</div>
+            <div class="node gui">
+                <div class="node-title">Log Summary</div>
+                <div class="node-desc">Display invoice count, item count, and grand total value in GUI</div>
+                <div class="detail-box">
+                    <ul>
+                        <li>Found X invoice(s), Y items, Grand Total: $Z</li>
+                        <li>Invoice 123 (Project US25A0196): 5 items, $1,234.56</li>
+                        <li>Saved: filename.csv</li>
+                        <li>Real-time scrolling Activity Log tab</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Parts Database Tab Features -->
+        <div class="stage">
+            <div class="stage-label">PARTS DATABASE TAB FEATURES</div>
+            <div class="parallel-container">
+                <div class="branch">
+                    <div class="node database">
+                        <div class="node-title">Parts Master</div>
+                        <div class="node-desc">Browse all parts with search/filter</div>
+                        <div class="detail-box">
+                            <ul>
+                                <li>Filter: All / With HTS / No HTS</li>
+                                <li>Search by part number</li>
+                                <li>Set HTS codes manually</li>
+                                <li>View part history</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="branch">
+                    <div class="node database">
+                        <div class="node-title">HTS Codes Tab</div>
+                        <div class="node-desc">Manage HTS code mappings</div>
+                        <div class="detail-box">
+                            <ul>
+                                <li>Drag-drop Excel/CSV import</li>
+                                <li>View all HTS codes</li>
+                                <li>Auto-match to parts</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="branch">
+                    <div class="node gui">
+                        <div class="node-title">Manufacturers/MID</div>
+                        <div class="node-desc">Manage manufacturer list</div>
+                        <div class="detail-box">
+                            <ul>
+                                <li>Add/Edit/Delete manufacturers</li>
+                                <li>Company name to MID mapping</li>
+                                <li>Accessible via Lists menu</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Key Files Reference -->
+        <div class="stage">
+            <div class="node" style="max-width: 700px; background: linear-gradient(145deg, #1a1a2e, #0d0d1a);">
+                <div class="node-title" style="color: #fff;">Key Files Reference</div>
+                <div class="detail-box" style="max-width: 100%;">
+                    <ul>
+                        <li><strong>invoice_processor_gui.py</strong> - Unified GUI (OCRMillApp) and ProcessorEngine</li>
+                        <li><strong>parts_database.py</strong> - SQLite database management</li>
+                        <li><strong>config_manager.py</strong> - Configuration handling (JSON-based)</li>
+                        <li><strong>templates/base_template.py</strong> - Abstract template class</li>
+                        <li><strong>templates/mmcite_czech.py</strong> - Czech invoice template</li>
+                        <li><strong>templates/mmcite_brazilian.py</strong> - Brazilian invoice template</li>
+                        <li><strong>part_description_extractor.py</strong> - Auto-description generation</li>
+                        <li><strong>Resources/parts_database.db</strong> - Default database location</li>
+                        <li><strong>config.json</strong> - User configuration file</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Configuration Options -->
+        <div class="stage">
+            <div class="node" style="max-width: 600px; background: linear-gradient(145deg, #2a1a3a, #1a0d28);">
+                <div class="node-title" style="color: #ce93d8;">Configuration Options (config.json)</div>
+                <div class="detail-box" style="max-width: 100%;">
+                    <ul>
+                        <li><strong>input_folder</strong> - Where to watch for PDFs</li>
+                        <li><strong>output_folder</strong> - Where to save CSVs</li>
+                        <li><strong>database_path</strong> - SQLite database location</li>
+                        <li><strong>poll_interval</strong> - Seconds between folder checks</li>
+                        <li><strong>auto_start</strong> - Start monitoring on launch</li>
+                        <li><strong>consolidate_multi_invoice</strong> - One CSV per PDF vs per invoice</li>
+                        <li><strong>templates</strong> - Enable/disable specific templates</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Add hover effects for better interactivity
+        document.querySelectorAll('.node').forEach(node => {
+            node.addEventListener('mouseenter', function() {
+                this.style.cursor = 'pointer';
+            });
+        });
+    </script>
+</body>
+</html>

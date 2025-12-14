@@ -1,0 +1,22 @@
+{
+  "input_folder": "input",
+  "output_folder": "output",
+  "database_path": "Resources/parts_database.db",
+  "poll_interval": 10,
+  "auto_start": false,
+  "consolidate_multi_invoice": true,
+  "templates": {
+    "mmcite_czech": {
+      "enabled": true
+    },
+    "mmcite_brazilian": {
+      "enabled": true
+    }
+  },
+  "window": {
+    "width": 1200,
+    "height": 750,
+    "x": null,
+    "y": null
+  }
+}
