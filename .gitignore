@@ -21,6 +21,14 @@ input/Processed/
 output/*.csv
 reports/*.csv
 
+# PyInstaller build artifacts
+build/
+dist/
+*.spec.bak
+*.manifest
+*.exe.bak
+
 # OS
 .DS_Store
 Thumbs.db
+nul
