@@ -1,0 +1,23 @@
+invoice_number,project_number,part_number,description,mid,country_origin,hts_code,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,bol_gross_weight
+2025602079,US25A0252,LSN110-002000,"Sinus - stool without backrest and armrests, 0,8 m long zinc coated steel structure with powder coating finish, seat of perforated steel sheet",CZMMCCAS907UHE,CZ,9403.20.0080,15.00,5090.22,,,,,,,3750.000,3750.000
+2025602079,US25A0252,LSN130-002000,"Sinus - park bench without backrest and armrests, 3,18 m long",CZMMCCAS907UHE,CZ,9401.69.8031,3.00,3139.40,,,,,,,3750.000,3750.000
+2025602079,US25A0252,NDZ01,"Spare part - threaded rod M8x150 zinc coated, 1 piece threaded rod M8x165 zinc",CZMMCCAS907UHE,CZ,,72.00,221.68,,,,,,,3750.000,3750.000
+2025602081,US25A0258,PRX345-0029-US23A0057,"Prax - litter bin of rectangular base, anchoring onto the paving, with cover, container",CZMMCCAS907UHE,CZ,7310.29.0050,6.00,4522.86,,,,,,,3750.000,3750.000
+2025602081,US25A0258,ND502,Accessories for fixing the street furniture threaded rod M10x200 zinc,CZMMCCAS907UHE,CZ,7318.15.2095,12.00,91.10,,,,,,,3750.000,3750.000
+2025602083,US25A0191,CS111-002100,"Crystal - litter bin of square base, anchoring onto the paving, integrated ashtray,",CZMMCCAS907UHE,CZ,7310.29.0050,3.00,1122.68,,,,,,,3750.000,3750.000
+2025602083,US25A0191,CP111-002000,"Crystal - Special litter bin for dog excrements of square base, anchoring onto the",CZMMCCAS907UHE,CZ,7310.29.0050,2.00,807.67,,,,,,,3750.000,3750.000
+2025602083,US25A0191,ND502,Accessories for fixing the street furniture threaded rod M10x200 zinc,CZMMCCAS907UHE,CZ,7318.15.2095,5.00,37.96,,,,,,,3750.000,3750.000
+2025602084,US25A0256,LV156-207000,"Vera - Park bench with backrest and armrests, length1.8 m steel structure coated with hot-dip galvanization and a double layer of powder-coated paint for C5 environments,",CZMMCCAS907UHE,CZ,9401.69.8031,1.00,303.92,,,,,,,3750.000,3750.000
+2025602084,US25A0256,ND503,Accessories for fixing the benches,CZMMCCAS907UHE,CZ,7318.15.2095,1.00,5.82,,,,,,,3750.000,3750.000
+2025602085,US25A0213,ELK110-002000,Elk - stand for bicycles aluminium alloy structure with powder coating finish,CZMMCCAS907UHE,CZ,9403.20.0082,1.00,436.60,,,,,,,3750.000,3750.000
+2025602085,US25A0213,NDZ04,Spare part - threaded rod M10x200 ZN - 1pc,CZMMCCAS907UHE,CZ,,12.00,22.27,,,,,,,3750.000,3750.000
+2025602086,US25A0249,GMZ110-007000,"Gomez - stand for bicycles zinc coated steel structure with double layer of powder coating finish (C5 treatment), aluminium alloy structure with powder coating finish, rubber",CZMMCCAS907UHE,CZ,9403.20.0082,2.00,616.27,,,,,,,3750.000,3750.000
+2025602086,US25A0249,LLP256-007000,"Limpido - park bench with backrest, 2 m long zinc coated steel structure with double layer of powder coating finish (C5 treatment)",CZMMCCAS907UHE,CZ,9401.69.8031,2.00,1900.78,,,,,,,3750.000,3750.000
+2025602086,US25A0249,ND502,Accessories for fixing the street furniture threaded rod M10x200 zinc,CZMMCCAS907UHE,CZ,7318.15.2095,2.00,15.18,,,,,,,3750.000,3750.000
+2025602086,US25A0249,NDZ04,Spare part - threaded rod M10x200 ZN - 1pc,CZMMCCAS907UHE,CZ,,8.00,14.85,,,,,,,3750.000,3750.000
+2025602082,US25A0244,SE101-002000,"Elias - bollard, heigt 100 cm, anchoring onto the pavement steel structure - zinc coated with powder coating finish",CZMMCCAS907UHE,CZ,7308.90.6000,9.00,1001.34,,,,,,,3750.000,3750.000
+2025602082,US25A0244,NNK365-002000,"Nanuk - litter bin of square base, on central leg, with cover, container volume 50l",CZMMCCAS907UHE,CZ,7310.29.0050,4.00,1447.18,,,,,,,3750.000,3750.000
+2025602082,US25A0244,NNK366-002000,"Nanuk - litter bin of square base, on central leg, with cover, without ashtray,",CZMMCCAS907UHE,CZ,7310.29.0050,5.00,2123.68,,,,,,,3750.000,3750.000
+2025602082,US25A0244,NNK265-002000,"Nanuk - litter bin of square base, on central leg, with cover, container volume 50l",CZMMCCAS907UHE,CZ,7310.29.0050,4.00,1750.60,,,,,,,3750.000,3750.000
+2025602082,US25A0244,NNK266-002000,"Nanuk - litter bin of square base, with cover, container volume 50l",CZMMCCAS907UHE,CZ,7310.29.0050,5.00,2504.37,,,,,,,3750.000,3750.000
+2025602082,US25A0244,ND501,"Spare part - anchoring material M12, zinc coated (e.g. for 1 piece of bollard)",CZMMCCAS907UHE,CZ,7308.90.6000,27.00,276.08,,,,,,,3750.000,3750.000

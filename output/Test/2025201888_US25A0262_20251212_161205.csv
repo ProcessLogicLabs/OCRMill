@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,mid,hts_code,quantity,total_price,gross_weight,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025201888,US25A0262,SI105-002000,mmcité product SI105-002000,,,139.00,28179.70,,,,,,,,
+2025201888,US25A0262,ND501,Bollard - Model 501,,7308.90.6000,141.00,1498.32,,,,,,,,

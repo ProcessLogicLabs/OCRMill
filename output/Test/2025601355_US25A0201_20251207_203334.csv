@@ -1,0 +1,7 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025601355,US25A0201,LVS111-212000,3.00,816.71,37,14.22,84.59,0,,,38.90
+2025601355,US25A0201,SLU899,0.06,55.68,,,,,,,
+2025601355,US25A0201,ND501,3.00,31.75,100,,,0,,,
+2025601355,US25A0201,SLU899,0.06,2.16,,,,,,,
+2025601355,US25A0201,OBAL160,1.00,91.04,,,,0,,,
+2025601355,US25A0201,Celkem,997.34,997.34,,,,,,,

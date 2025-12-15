@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,quantity,total_price,ncm_code,hts_code,unit_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025/2067,US25A0218,LWD200t_FSC (oil),1.00,2671.68,94017900,9401.69.8031,2671.68,,31.48,118,,,,
+2025/2067,US25A0218,LWD112t_FSC (oil),2.00,1177.44,94017900,9401.69.8031,588.72,,16.2,65,,,,

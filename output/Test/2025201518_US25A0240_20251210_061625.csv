@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025201518,US25A0240,OUTSIDER-177-I,1.00,2600.98,,,1181.06,0,,,108
+2025201518,US25A0240,OUTSIDER-177-O,3.00,7802.93,,,1090.11,0,,,136
+2025201518,US25A0240,OUTSIDER-177-L,3.00,7802.93,,,859.60,0,,,124
+2025201518,US25A0240,OUTSIDER-203,1.00,1705.44,,,1705.44,0,,,78
+2025201518,US25A0240,OUTSIDER-173,1.00,1432.21,,,,,,,

@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025601845,US25A0237,TCH415-2029-US23A0055,mmcité product TCH415-2029-US23A0055,4.00,1415.98,,,,,,,,
+2025601845,US25A0237,LPU152-202000,Planter/Flower pot - Model 152,8.00,3100.82,,,,,,,,9403.20.0080
+2025601845,US25A0237,QB610-202000,mmcité product QB610-202000,5.00,3419.26,,,,,,,,
+2025601845,US25A0237,ND501,Bollard - Model 501,4.00,42.44,,,,,,,,7308.90.6000
+2025601845,US25A0237,ND502,Bollard - Model 502,5.00,38.05,,,,,,,,7308.90.6000

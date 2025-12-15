@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025200820,US25A0134,LOB241-002000,7.00,7399.14,,,645.99,28,,,
+2025200820,US25A0134,NDZ01,28.00,83.45,,,,0,,,
+2025200820,US25A0134,OBAL161,4.00,501.04,,,,0,,,
+2025200820,US25A0134,SLU899,1.00,510.18,,,,,,,

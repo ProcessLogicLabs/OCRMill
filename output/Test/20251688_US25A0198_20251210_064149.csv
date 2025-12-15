@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,quantity,total_price,ncm_code,hts_code,unit_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+20251688,US25A0198,PRX345-atp-plano-C5,mmcité product PRX345-atp-plano-C5,18.00,15475.68,73101090,7310.10.0050,859.76,,74.23,429,,,,
+20251688,US25A0198,VT510-C5,mmcité product VT510-C5,3.00,670.56,94032090,7326.90.8688,223.52,,13.92,114,,,,

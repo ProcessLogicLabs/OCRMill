@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,quantity,total_price,ncm_code,hts_code,unit_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+20251492,US25A0182,LLP226-C5,mmcité product LLP226-C5,1.00,623.92,94017900,9403.20.0030,623.92,,65,318,,,,
+20251492,US25A0182,GMZ110-C5,mmcité product GMZ110-C5,2.00,580.80,94032090,9403.20.0080,290.40,,7.1,110,,,,

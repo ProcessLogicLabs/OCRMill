@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201518,US25A0240,OUTSIDER-177-I,mmcité product OUTSIDER-177-I,1.00,2600.98,,,,,,,,
+2025201518,US25A0240,OUTSIDER-177-O,mmcité product OUTSIDER-177-O,3.00,7802.93,,,,,,,,
+2025201518,US25A0240,OUTSIDER-177-L,mmcité product OUTSIDER-177-L,3.00,7802.93,,,,,,,,
+2025201518,US25A0240,OUTSIDER-203,mmcité product OUTSIDER-203,1.00,1705.44,,,,,,,,
+2025201518,US25A0240,OUTSIDER-173,mmcité product OUTSIDER-173,1.00,1432.21,,,,,,,,

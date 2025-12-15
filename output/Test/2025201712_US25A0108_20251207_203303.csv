@@ -1,0 +1,8 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025201712,US25A0108,CP110-002000,2.00,721.85,,,,,,,
+2025201712,US25A0108,SLU899,0.06,49.22,,,,,,,
+2025201712,US25A0108,ND502,2.00,15.02,100,,,0,,,
+2025201712,US25A0108,SLU899,0.06,1.02,,,,,,,
+2025201712,US25A0108,SLU004,1.00,474.05,,,,,,,
+2025201712,US25A0108,OBAL160,1.00,90.07,,,,0,,,
+2025201712,US25A0108,Celkem,1.351,1351.23,,,,,,,

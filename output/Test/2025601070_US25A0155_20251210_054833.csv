@@ -1,0 +1,4 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025601070,US25A0155,PRX315-6C2000,15.00,14470.20,80,67.92,,0,,,85.10
+2025601070,US25A0155,PRX118-6C2000,1.00,644.02,83,31.70,,0,,,38
+2025601070,US25A0155,ND502,16.00,119.98,100,,,0,,,

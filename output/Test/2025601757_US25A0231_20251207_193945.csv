@@ -1,0 +1,7 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025601757,US25A0231,STE411-0029-US25A0231,10.00,835.14,93,7.51,65.82,0,,,8.10
+2025601757,US25A0231,SLU899,0.06,56.86,,,,,,,
+2025601757,US25A0231,ND512,10.00,107.57,,,,,,,
+2025601757,US25A0231,SLU899,0.06,7.33,,,,,,,
+2025601757,US25A0231,OBAL160,1.00,90.02,,,,,,,
+2025601757,US25A0231,Celkem,1.096,1096.92,,,,,,,

@@ -1,0 +1,4 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025201517,US25A0224,RVA171-642000,4.00,2735.70,48,23.40,281.64,0,,,48.30
+2025201517,US25A0224,RVA171-10-642000,4.00,2990.32,53,28.11,336.39,0,,,53.10
+2025201517,US25A0224,NDZ04,32.00,59.43,100,,,0,,,

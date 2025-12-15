@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025601068,US25A0156,DON150-072000,11.00,1694.81,98,15.08,128.24,2,0.32,2.72,15.40
+2025601068,US25A0156,SLU899,0.06,119.63,,,,,,,
+2025601068,US25A0156,OBAL155,1.00,75.74,,,,0,,,
+2025601068,US25A0156,Celkem,1.890,1890.18,,,,,,,

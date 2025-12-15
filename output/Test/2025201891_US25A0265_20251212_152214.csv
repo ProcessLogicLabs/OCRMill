@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201891,US25A0265,RTS1571-J02000,mmcité product RTS1571-J02000,2.00,2125.37,,,,,,,,
+2025201891,US25A0265,ND512,Bollard - Model 512,2.00,24.82,,,,,,,,7308.90.6000

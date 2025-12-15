@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025201516,US25N0015,SLU899,0.06,6.55,,,,,,,
+2025201516,US25N0015,SLU899,0.06,25.01,,,,,,,
+2025201516,US25N0015,SLU070,4.00,5.76,,,,,,,
+2025201516,US25N0015,OBAL160,1.00,91.14,,,,0,,,
+2025201516,US25N0015,Celkem,591.32,591.32,,,,,,,

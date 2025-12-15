@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201084,US25A0175,LBS935-002000,mmcité product LBS935-002000,1.00,192.72,,,,,,,,
+2025201084,US25A0175,LBS165-002000,mmcité product LBS165-002000,4.00,315.92,,,,,,,,
+2025201084,US25A0175,SNS215-03-002000,mmcité product SNS215-03-002000,2.00,3730.33,,,,,,,,
+2025201084,US25A0175,ND501,Bollard - Model 501,5.00,52.75,,,,,,,,7308.90.6000
+2025201084,US25A0175,NDZ01,Bollard,30.00,92.05,,,,,,,,7308.90.6000

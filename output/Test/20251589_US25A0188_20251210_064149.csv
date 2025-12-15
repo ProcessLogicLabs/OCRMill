@@ -1,0 +1,2 @@
+invoice_number,project_number,part_number,description,quantity,total_price,ncm_code,hts_code,unit_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+20251589,US25A0188,CP110,mmcité product CP110,2.00,721.60,73101090,7310.10.0050,360.80,,30.1,184,,,,

@@ -1,0 +1,4 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201087,US25A0172,LPU121-J12000,Planter/Flower pot - Model 121,14.00,5691.95,,,,,,,,9403.20.0080
+2025201087,US25A0172,NDZ01,Bollard,56.00,171.83,,,,,,,,7308.90.6000
+2025201087,US25A0172,E00ZZ,mmcité product E00ZZ,0,6716.71,,,,,,,,

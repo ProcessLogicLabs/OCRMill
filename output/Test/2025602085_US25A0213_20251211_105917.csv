@@ -1,0 +1,8 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025602085,US25A0213,ELK110-002000,1.00,436.60,,,,,,,
+2025602085,US25A0213,SLU899,0.06,29.77,,,,,,,
+2025602085,US25A0213,SLU899,0.06,29.77,,,,,,,
+2025602085,US25A0213,NDZ04,12.00,22.27,,,,,,,
+2025602085,US25A0213,SLU899,0.06,1.52,,,,,,,
+2025602085,US25A0213,OBAL160,1.00,91.06,,,,,,,
+2025602085,US25A0213,Celkem,1.513,1513.96,,,,,,,

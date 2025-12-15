@@ -1,0 +1,2 @@
+invoice_number,project_number,part_number,description,quantity,total_price,ncm_code,hts_code,unit_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+20251777,US25A0206,CS210x,mmcité product CS210x,4.00,1647.36,73101090,7310.10.0050,411.84,,42.6,210,,,,

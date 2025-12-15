@@ -1,0 +1,9 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025602083,US25A0191,CS111-002100,3.00,1122.68,,,,,,,
+2025602083,US25A0191,SLU899,0.06,76.55,,,,,,,
+2025602083,US25A0191,CP111-002000,2.00,807.67,,,,,,,
+2025602083,US25A0191,SLU899,0.06,55.07,,,,,,,
+2025602083,US25A0191,ND502,5.00,37.96,,,,,,,
+2025602083,US25A0191,SLU899,0.06,2.59,,,,,,,
+2025602083,US25A0191,OBAL160,1.00,91.06,,,,,,,
+2025602083,US25A0191,Celkem,2.193,2193.58,,,,,,,

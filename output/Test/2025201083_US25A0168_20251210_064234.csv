@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201083,US25A0168,UIS540-321-J02000,mmcité product UIS540-321-J02000,1.00,3199.84,,,,,,,,
+2025201083,US25A0168,ND504,Bollard - Model 504,1.00,12.36,,,,,,,,7308.90.6000

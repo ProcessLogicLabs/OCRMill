@@ -1,0 +1,7 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025602084,US25A0256,LV156-207000,1.00,303.92,,,,,,,
+2025602084,US25A0256,SLU899,0.06,20.72,,,,,,,
+2025602084,US25A0256,ND503,1.00,5.82,,,,,,,
+2025602084,US25A0256,SLU899,0.06,0.40,,,,,,,
+2025602084,US25A0256,OBAL160,1.00,91.06,,,,,,,
+2025602084,US25A0256,Celkem,421.92,421.92,,,,,,,

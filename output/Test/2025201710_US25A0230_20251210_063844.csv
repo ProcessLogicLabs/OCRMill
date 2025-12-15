@@ -1,0 +1,9 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201710,US25A0230,LBQ1111-202000,mmcité product LBQ1111-202000,7.00,4932.67,,,,,,,,
+2025201710,US25A0230,LBQ9621-202000,mmcité product LBQ9621-202000,3.00,6435.37,,,,,,,,
+2025201710,US25A0230,QB515-072000,mmcité product QB515-072000,16.00,6387.71,,,,,,,,
+2025201710,US25A0230,BBQ110-202000,mmcité product BBQ110-202000,5.00,1089.83,,,,,,,,
+2025201710,US25A0230,BBQ110-202000,mmcité product BBQ110-202000,4.00,871.87,,,,,,,,
+2025201710,US25A0230,ND514,Bollard - Model 514,10.00,74.67,,,,,,,,7308.90.6000
+2025201710,US25A0230,ND502,Bollard - Model 502,16.00,120.14,,,,,,,,7308.90.6000
+2025201710,US25A0230,ND512,Bollard - Model 512,9.00,96.86,,,,,,,,7308.90.6000

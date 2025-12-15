@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,mid,hts_code,quantity,total_price,gross_weight,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025201887,US25A0255,VLA156-J00000,mmcité product VLA156-J00000,,,4.00,3135.76,,,,,,,,
+2025201887,US25A0255,NDZ01,Bollard,,7308.90.6000,16.00,49.45,,,,,,,,

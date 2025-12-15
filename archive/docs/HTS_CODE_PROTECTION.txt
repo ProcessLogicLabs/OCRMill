@@ -1,0 +1,71 @@
+HTS CODE PROTECTION - IMPLEMENTATION NOTES
+===========================================
+Date: December 14, 2025
+
+CHANGE SUMMARY:
+--------------
+HTS codes in the parts database are now PROTECTED from being overwritten
+by PDF invoice processing.
+
+PREVIOUS BEHAVIOR:
+-----------------
+- PDFs could overwrite database HTS codes (including with empty values)
+- This caused loss of carefully maintained HTS code data
+- Users had to constantly re-enter HTS codes
+
+NEW BEHAVIOR:
+------------
+- Database HTS codes are NEVER overwritten during PDF processing
+- Once an HTS code is in the database, it is protected
+- HTS codes can ONLY be changed via:
+  1. Manual edit in Parts Master tab
+  2. Excel import via load_hts_mapping()
+  3. Direct database editing
+
+TECHNICAL DETAILS:
+-----------------
+File: parts_database.py
+Function: _update_part_master()
+Lines: 275-316
+
+Key Changes:
+1. Removed HTS code from UPDATE statement (line 296)
+2. HTS code column removed from update parameters (line 308)
+3. Added clear comment documenting this protection (line 278)
+
+CODE LOGIC:
+----------
+When updating existing part:
+  - description: Can be updated if PDF provides new value
+  - hts_code: NEVER updated (PROTECTED)
+  - steel_pct: Can be updated from latest occurrence
+  - aluminum_pct: Can be updated from latest occurrence  
+  - mid: Can be updated if PDF provides new value
+  - country_origin: Can be updated if PDF provides new value
+  - client_code: Can be updated if PDF provides new value
+  - fsc_certified: Can be updated if PDF provides new value
+  - fsc_certificate_code: Can be updated if PDF provides new value
+
+When inserting new part:
+  - All fields including hts_code are populated from PDF
+  - This is acceptable as it's the initial creation
+
+BENEFITS:
+--------
+1. Protects 237 existing HTS codes from accidental overwrites
+2. Maintains data integrity
+3. Reduces manual data re-entry
+4. Database becomes master source of truth for HTS codes
+5. Users can trust their HTS code data won't be lost
+
+RELATED SYSTEMS:
+---------------
+- Parts Master tab: Can still edit HTS codes manually
+- Excel Import: load_hts_mapping() still updates HTS codes
+- CBP Export: Uses protected HTS codes from database
+- Invoice Processing: Stores PDF HTS codes in part_occurrences but doesn't update parts table
+
+TESTING:
+-------
+Verified that part ELK110-002000 with HTS code 9403.20.0082 is protected.
+Total of 237 parts with HTS codes are now protected.

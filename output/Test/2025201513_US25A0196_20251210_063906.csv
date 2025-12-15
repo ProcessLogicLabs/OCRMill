@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201513,US25A0196,ELK110-002000,mmcité product ELK110-002000,60.00,24431.26,,,,,,,,
+2025201513,US25A0196,NDZ04,Bollard,244.00,453.19,,,,,,,,7308.90.6000

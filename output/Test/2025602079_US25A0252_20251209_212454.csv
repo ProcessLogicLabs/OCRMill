@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025602079,US25A0252,LSN110-002000,15.00,5090.22,,,,,,,
+2025602079,US25A0252,LSN130-002000,3.00,3139.40,,,,,,,
+2025602079,US25A0252,NDZ01,72.00,221.68,,,,,,,
+2025602079,US25A0252,OBAL160,2.00,182.12,,,,,,,

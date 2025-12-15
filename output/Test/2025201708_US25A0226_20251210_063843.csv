@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201708,US25A0226,ELK110-002000,mmcité product ELK110-002000,8.00,3454.76,,,,,,,,
+2025201708,US25A0226,PRX-B315-207000,mmcité product PRX-B315-207000,4.00,4039.28,,,,,,,,
+2025201708,US25A0226,NDZ04,Bollard,32.00,58.74,,,,,,,,7308.90.6000
+2025201708,US25A0226,ND502,Bollard - Model 502,4.00,30.04,,,,,,,,7308.90.6000

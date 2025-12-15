@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025601741,US25A0243,VT110-002100,mmcité product VT110-002100,1.00,186.07,,,,,,,,
+2025601741,US25A0243,PRX115-642000,mmcité product PRX115-642000,1.00,507.28,,,,,,,,
+2025601741,US25A0243,ND501,Bollard - Model 501,1.00,10.41,,,,,,,,7308.90.6000
+2025601741,US25A0243,ND502,Bollard - Model 502,1.00,7.47,,,,,,,,7308.90.6000

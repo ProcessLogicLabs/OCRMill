@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025602086,US25A0249,GMZ110-007000,2.00,616.27,,,,,,,
+2025602086,US25A0249,LLP256-007000,2.00,1900.78,,,,,,,
+2025602086,US25A0249,ND502,2.00,15.18,,,,,,,
+2025602086,US25A0249,NDZ04,8.00,14.85,,,,,,,

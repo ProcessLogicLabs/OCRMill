@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025750319,US25A0234,LAG910-J02000,mmcité product LAG910-J02000,1.00,392.51,,,,,,,,
+2025750319,US25A0234,VLA1521-J02000,mmcité product VLA1521-J02000,2.00,1057.42,,,,,,,,
+2025750319,US25A0234,ND501,Bollard - Model 501,1.00,10.47,,,,,,,,7308.90.6000
+2025750319,US25A0234,ND511,Bollard - Model 511,2.00,19.77,,,,,,,,7308.90.6000

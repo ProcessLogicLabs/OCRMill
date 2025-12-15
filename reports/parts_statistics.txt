@@ -1,0 +1,9 @@
+Parts Database Statistics
+==================================================
+
+Total Unique Parts: 247
+Total Part Occurrences: 2212
+Total Invoices Processed: 89
+Total Projects: 81
+Total Value Processed: $4,470,031.24
+Parts with HTS Codes: 129 (52.2%)

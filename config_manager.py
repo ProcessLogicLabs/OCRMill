@@ -18,6 +18,10 @@ DEFAULT_CONFIG = {
     "poll_interval": 60,
     "auto_start": False,
     "consolidate_multi_invoice": False,  # False = separate CSVs per invoice, True = one CSV per PDF
+    "cbp_export": {
+        "input_folder": "output/Processed",
+        "output_folder": "output/CBP_Export"
+    },
     "templates": {
         "mmcite_czech": {"enabled": True},
         "mmcite_brazilian": {"enabled": True}
@@ -27,6 +31,25 @@ DEFAULT_CONFIG = {
         "height": 600,
         "x": None,
         "y": None
+    },
+    "parts_master_columns": {
+        "part_number": True,
+        "description": True,
+        "hts_code": True,
+        "country_origin": True,
+        "mid": True,
+        "client_code": True,
+        "steel_pct": True,
+        "aluminum_pct": True,
+        "copper_pct": True,
+        "wood_pct": True,
+        "auto_pct": True,
+        "non_steel_pct": True,
+        "qty_unit": True,
+        "sec301_exclusion_tariff": True,
+        "fsc_certified": True,
+        "fsc_certificate_code": True,
+        "last_updated": True
     }
 }
 
@@ -160,3 +183,52 @@ class ConfigManager:
         """Get list of enabled template names."""
         templates = self.config.get("templates", {})
         return [name for name, conf in templates.items() if conf.get("enabled", True)]
+
+    # CBP Export settings
+    @property
+    def cbp_input_folder(self) -> str:
+        """Get CBP export input folder path."""
+        return self.config.get("cbp_export", {}).get("input_folder", "output/Processed")
+
+    @cbp_input_folder.setter
+    def cbp_input_folder(self, value: str):
+        """Set CBP export input folder path."""
+        if "cbp_export" not in self.config:
+            self.config["cbp_export"] = {}
+        self.config["cbp_export"]["input_folder"] = str(value)
+        self.save()
+
+    @property
+    def cbp_output_folder(self) -> str:
+        """Get CBP export output folder path."""
+        return self.config.get("cbp_export", {}).get("output_folder", "output/CBP_Export")
+
+    @cbp_output_folder.setter
+    def cbp_output_folder(self, value: str):
+        """Set CBP export output folder path."""
+        if "cbp_export" not in self.config:
+            self.config["cbp_export"] = {}
+        self.config["cbp_export"]["output_folder"] = str(value)
+        self.save()
+
+    # Parts Master column visibility settings
+    def get_column_visible(self, column_name: str) -> bool:
+        """Check if a Parts Master column is visible."""
+        columns = self.config.get("parts_master_columns", {})
+        return columns.get(column_name, True)
+
+    def set_column_visible(self, column_name: str, visible: bool):
+        """Set visibility for a Parts Master column."""
+        if "parts_master_columns" not in self.config:
+            self.config["parts_master_columns"] = {}
+        self.config["parts_master_columns"][column_name] = visible
+        self.save()
+
+    def get_visible_columns(self) -> List[str]:
+        """Get list of visible column names."""
+        columns = self.config.get("parts_master_columns", {})
+        return [name for name, visible in columns.items() if visible]
+
+    def get_all_column_settings(self) -> Dict[str, bool]:
+        """Get all column visibility settings."""
+        return self.config.get("parts_master_columns", {}).copy()

@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025200824,US25A0149,STE110-006000,2.00,430.06,,,170.07,0,,,8.2
+2025200824,US25A0149,SLU899,1.00,29.32,,,,,,,
+2025200824,US25A0149,ND601,2.00,24.09,,,,0,,,
+2025200824,US25A0149,SLU899,1.00,1.64,,,,,,,
+2025200824,US25A0149,OBAL151,1.00,60.31,,,,0,,,

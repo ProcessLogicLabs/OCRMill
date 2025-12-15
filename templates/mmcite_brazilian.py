@@ -31,7 +31,8 @@ class MMCiteBrazilianTemplate(BaseTemplate):
         'aluminum_pct',
         'aluminum_kg',
         'aluminum_value',
-        'net_weight'
+        'net_weight',
+        'bol_gross_weight'
     ]
     
     def can_process(self, text: str) -> bool:
@@ -275,14 +276,14 @@ class MMCiteBrazilianTemplate(BaseTemplate):
 
         for pattern in brazil_patterns:
             if re.search(pattern, text, re.IGNORECASE):
-                return "MMCITE BRAZIL"
+                return "MMCITE S/A BRAZIL"
 
         # Pattern 2: Just "mmcité" without Brazil context - assume Czech
         if re.search(r'mmcit[ée]', text, re.IGNORECASE):
             # Check if Brazil is mentioned elsewhere
             if re.search(r'brasil|brazil', text, re.IGNORECASE):
-                return "MMCITE BRAZIL"
-            return "MMCITE AS"
+                return "MMCITE S/A BRAZIL"
+            return "MMCITE S/A CZECH REPUBLIC"
 
         # Pattern 3: Look for "Exporter:" or "Exportador:" or "Supplier:"
         supplier_patterns = [

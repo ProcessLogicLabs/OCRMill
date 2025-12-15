@@ -1,0 +1,10 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025601740,US25A0197,PQA151-212000,Table - Model 151,4.00,2373.21,,,,,,,,9403.20.0080
+2025601740,US25A0197,LPC12-212000,mmcité product LPC12-212000,1.00,1248.74,,,,,,,,
+2025601740,US25A0197,LPC12-ae-212000,mmcité product LPC12-ae-212000,2.00,2790.40,,,,,,,,
+2025601740,US25A0197,LPC12A-ae-2129-US25A0197,mmcité product LPC12A-ae-2129-US25A0197,1.00,1239.33,,,,,,,,
+2025601740,US25A0197,LPC61-002000,mmcité product LPC61-002000,4.00,344.27,,,,,,,,
+2025601740,US25A0197,LPC60-002000,mmcité product LPC60-002000,4.00,171.06,,,,,,,,
+2025601740,US25A0197,LPC69-002000,mmcité product LPC69-002000,3.00,263.18,,,,,,,,
+2025601740,US25A0197,LPC12B-ae-2129-US25A0197,mmcité product LPC12B-ae-2129-US25A0197,1.00,808.91,,,,,,,,
+2025601740,US25A0197,ND505,Bollard - Model 505,3.00,58.86,,,,,,,,7308.90.6000

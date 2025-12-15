@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,quantity,total_price,ncm_code,hts_code,unit_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025/0730,US25A011,OMAHA-01-002_FSC,144.00,11088.00,94039100,9403.91.0040,77.00,,0,0,,,,
+2025/0730,US25A011,OMAHA-03-001_FSC,168.00,9072.00,94039100,9403.91.0040,54.00,,0,0,,,,
+2025/0730,US25A011,OMAHA-04-000_FSC,15.00,900.00,94039100,9403.91.0040,60.00,,0,0,,,,
+2025/0730,US25A011,LPC-DH-PD-000_FSC,1.00,15.70,94039100,9403.91.0040,15.70,,0,0,,,,
+2025/0730,US25A011,LPC-DH-01-001_03_FSC,1.00,5.10,94039100,9403.91.0040,5.10,,0,0,,,,

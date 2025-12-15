@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025601738,US25A0236,MAG625-002008,8.00,6207.12,63,36.03,416.88,35,20.10,232.56,
+2025601738,US25A0236,SLU899,0.06,423.21,,,,,,,
+2025601738,US25A0236,SLU900,0.06,423.21,,,,,,,
+2025601738,US25A0236,OBAL160,1.00,89.56,,,,,,,
+2025601738,US25A0236,Celkem,7.143,7143.10,,,,,,,

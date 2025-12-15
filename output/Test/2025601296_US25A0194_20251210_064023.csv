@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025601296,US25A0194,LBQ110-J02000,mmcité product LBQ110-J02000,1.00,820.45,,,,,,,,
+2025601296,US25A0194,NDZ01,Bollard,4.00,12.25,,,,,,,,7308.90.6000

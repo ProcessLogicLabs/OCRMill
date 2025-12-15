@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025601770,US25A0241,RTW281-002000R,mmcité product RTW281-002000R,18.00,35364.12,,,,,,,,
+2025601770,US25A0241,LRA441-002000,mmcité product LRA441-002000,11.00,7149.45,,,,,,,,
+2025601770,US25A0241,NDZ04,Bollard,74.00,136.15,,,,,,,,7308.90.6000
+2025601770,US25A0241,NDZ01,Bollard,46.00,140.42,,,,,,,,7308.90.6000

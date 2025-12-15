@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025750319,US25A0234,LAG910-J02000,1.00,392.51,64,16.92,213.83,,,,
+2025750319,US25A0234,VLA1521-J02000,2.00,1057.42,0,,,47,11.40,209.11,
+2025750319,US25A0234,ND501,1.00,10.47,100,,,0,,,
+2025750319,US25A0234,ND511,2.00,19.77,100,,,0,,,
+2025750319,US25A0234,OBAL160,1.00,90.07,,,,,,,

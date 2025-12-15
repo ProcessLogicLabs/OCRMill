@@ -1,0 +1,6 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201889,US25U0001,NDZ04,Bollard,824.00,1534.94,,,,,,,,7308.90.6000
+2025201889,US25U0001,ND501,Bollard - Model 501,128.00,1360.18,,,,,,,,7308.90.6000
+2025201889,US25U0001,ND272,Bollard - Model 272,420.00,3325.08,,,,,,,,7308.90.6000
+2025201889,US25U0001,NDZ01,Bollard,200.00,618.11,,,,,,,,7308.90.6000
+2025201889,US25U0001,ND512,Bollard - Model 512,50.00,546.14,,,,,,,,7308.90.6000

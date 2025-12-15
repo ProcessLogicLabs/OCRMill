@@ -1,0 +1,7 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025601869,US25A0190,LWD110-202039-US25A0190,mmcité product LWD110-202039-US25A0190,6.00,11502.40,,,,,,,,
+2025601869,US25A0190,LVS6501A-2029-US25A0190,mmcité product LVS6501A-2029-US25A0190,2.00,2878.86,,,,,,,,
+2025601869,US25A0190,LVS6501C-2029-US25A0190,mmcité product LVS6501C-2029-US25A0190,1.00,1566.44,,,,,,,,
+2025601869,US25A0190,ND503,Bollard - Model 503,12.00,70.11,,,,,,,,7308.90.6000
+2025601869,US25A0190,ND512,Bollard - Model 512,5.00,54.61,,,,,,,,7308.90.6000
+2025601869,US25A0190,ND550De,Bollard - Model 550,6.00,465.36,,,,,,,,7308.90.6000

@@ -1,10 +1,14 @@
 {
-  "input_folder": "input",
-  "output_folder": "output",
+  "input_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\input",
+  "output_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\output",
   "database_path": "Resources/parts_database.db",
   "poll_interval": 10,
   "auto_start": false,
   "consolidate_multi_invoice": true,
+  "cbp_export": {
+    "input_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\output",
+    "output_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\output\\CBP_Export"
+  },
   "templates": {
     "mmcite_czech": {
       "enabled": true
@@ -18,5 +22,24 @@
     "height": 750,
     "x": null,
     "y": null
+  },
+  "parts_master_columns": {
+    "part_number": true,
+    "description": true,
+    "hts_code": true,
+    "country_origin": true,
+    "mid": true,
+    "client_code": false,
+    "steel_pct": true,
+    "aluminum_pct": true,
+    "copper_pct": false,
+    "wood_pct": false,
+    "auto_pct": false,
+    "non_steel_pct": true,
+    "qty_unit": true,
+    "sec301_exclusion_tariff": false,
+    "fsc_certified": true,
+    "fsc_certificate_code": true,
+    "last_updated": true
   }
 }

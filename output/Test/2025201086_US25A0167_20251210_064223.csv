@@ -1,0 +1,3 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025201086,US25A0167,LWD150-B02000,mmcité product LWD150-B02000,10.00,11636.38,,,,,,,,
+2025201086,US25A0167,ND550B,Bollard - Model 550,10.00,93.31,,,,,,,,7308.90.6000

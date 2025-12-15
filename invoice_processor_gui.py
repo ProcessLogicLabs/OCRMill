@@ -47,6 +47,7 @@ except ImportError:
 
 from config_manager import ConfigManager
 from templates import get_all_templates, TEMPLATE_REGISTRY
+from templates.bill_of_lading import BillOfLadingTemplate
 from parts_database import PartsDatabase, create_parts_report
 
 
@@ -129,6 +130,19 @@ class ProcessorEngine:
                     self.log(f"  No text extracted from {pdf_path.name}")
                     return []
 
+                # Scan for Bill of Lading and extract gross weight
+                bol_weight = None
+                bol_template = BillOfLadingTemplate()
+
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text and bol_template.can_process(page_text):
+                        self.log(f"  Found Bill of Lading on a page")
+                        bol_weight = bol_template.extract_gross_weight(page_text)
+                        if bol_weight:
+                            self.log(f"  Extracted BOL gross weight: {bol_weight} kg")
+                            break  # Found weight, no need to check more pages
+
                 # Find the best template
                 template = self.get_best_template(full_text)
                 if not template:
@@ -153,8 +167,10 @@ class ProcessorEngine:
                     if not page_text:
                         continue
 
-                    # Skip packing list pages
+                    # Skip packing list and BOL pages
                     if 'packing list' in page_text.lower() and 'invoice' not in page_text.lower():
+                        continue
+                    if 'bill of lading' in page_text.lower():
                         continue
 
                     # Check for new invoice on this page
@@ -172,6 +188,12 @@ class ProcessorEngine:
                             for item in items:
                                 item['invoice_number'] = current_invoice
                                 item['project_number'] = current_project
+                                # Add BOL gross weight for proration (total shipment weight)
+                                if bol_weight:
+                                    item['bol_gross_weight'] = bol_weight
+                                # Add BOL weight as net_weight if item doesn't have one
+                                if bol_weight and ('net_weight' not in item or not item.get('net_weight')):
+                                    item['net_weight'] = bol_weight
                             all_items.extend(items)
                             page_buffer = []
 
@@ -191,6 +213,12 @@ class ProcessorEngine:
                     for item in items:
                         item['invoice_number'] = current_invoice
                         item['project_number'] = current_project
+                        # Add BOL gross weight for proration (total shipment weight)
+                        if bol_weight:
+                            item['bol_gross_weight'] = bol_weight
+                        # Add BOL weight as net_weight if item doesn't have one
+                        if bol_weight and ('net_weight' not in item or not item.get('net_weight')):
+                            item['net_weight'] = bol_weight
                     all_items.extend(items)
 
                 # Count unique invoices and calculate grand total
@@ -214,8 +242,27 @@ class ProcessorEngine:
         if not items:
             return
 
-        # Add items to parts database and enrich with descriptions, HTS codes, and MID
+        # Add items to parts database and enrich with descriptions, HTS codes, MID, and country of origin
         for item in items:
+            # Look up MID and country_origin from manufacturer name BEFORE adding to database
+            if ('mid' not in item or not item['mid']) or ('country_origin' not in item or not item['country_origin']):
+                manufacturer_name = item.get('manufacturer_name', '')
+                if manufacturer_name:
+                    manufacturer = self.parts_db.get_manufacturer_by_name(manufacturer_name)
+                    if manufacturer:
+                        if 'mid' not in item or not item['mid']:
+                            if manufacturer.get('mid'):
+                                item['mid'] = manufacturer.get('mid', '')
+                        if 'country_origin' not in item or not item['country_origin']:
+                            if manufacturer.get('country'):
+                                item['country_origin'] = manufacturer.get('country', '')
+
+            # If country_origin still not set but we have MID, extract from first 2 letters of MID
+            if ('country_origin' not in item or not item['country_origin']) and item.get('mid'):
+                mid = item.get('mid', '')
+                if len(mid) >= 2:
+                    item['country_origin'] = mid[:2].upper()
+
             part_data = item.copy()
             part_data['source_file'] = pdf_name or 'unknown'
             self.parts_db.add_part_occurrence(part_data)
@@ -226,18 +273,22 @@ class ProcessorEngine:
             if 'hts_code' not in item or not item['hts_code']:
                 item['hts_code'] = part_data.get('hts_code', '')
 
-            # Look up MID from manufacturer name extracted from invoice
-            if 'mid' not in item or not item['mid']:
-                manufacturer_name = item.get('manufacturer_name', '')
-                if manufacturer_name:
-                    manufacturer = self.parts_db.get_manufacturer_by_name(manufacturer_name)
-                    if manufacturer and manufacturer.get('mid'):
-                        item['mid'] = manufacturer.get('mid', '')
+            # Get MID and country_origin from parts database if not already set
+            if ('mid' not in item or not item['mid']) or ('country_origin' not in item or not item['country_origin']):
+                part_summary = self.parts_db.get_part_summary(item.get('part_number', ''))
+                if part_summary:
+                    if 'mid' not in item or not item['mid']:
+                        if part_summary.get('mid'):
+                            item['mid'] = part_summary.get('mid', '')
+                    if 'country_origin' not in item or not item['country_origin']:
+                        if part_summary.get('country_origin'):
+                            item['country_origin'] = part_summary.get('country_origin', '')
 
-                if 'mid' not in item or not item['mid']:
-                    part_summary = self.parts_db.get_part_summary(item.get('part_number', ''))
-                    if part_summary and part_summary.get('mid'):
-                        item['mid'] = part_summary.get('mid', '')
+            # Final fallback: If country_origin still not set but we have MID, extract from first 2 letters of MID
+            if ('country_origin' not in item or not item['country_origin']) and item.get('mid'):
+                mid = item.get('mid', '')
+                if len(mid) >= 2:
+                    item['country_origin'] = mid[:2].upper()
 
             # Remove manufacturer_name from item (we only need MID in output)
             if 'manufacturer_name' in item:
@@ -252,7 +303,7 @@ class ProcessorEngine:
             by_invoice[inv_num].append(item)
 
         # Determine columns from items with specific ordering
-        columns = ['invoice_number', 'project_number', 'part_number', 'description', 'mid', 'hts_code', 'quantity', 'total_price']
+        columns = ['invoice_number', 'project_number', 'part_number', 'description', 'mid', 'country_origin', 'hts_code', 'quantity', 'total_price']
 
         for item in items:
             for key in item.keys():
@@ -466,6 +517,7 @@ class ManufacturersDialog:
         ttk.Button(btn_frame, text="Add New", command=self._add_new).pack(side="left", padx=2)
         ttk.Button(btn_frame, text="Edit", command=self._edit_selected).pack(side="left", padx=2)
         ttk.Button(btn_frame, text="Delete", command=self._delete_selected).pack(side="left", padx=2)
+        ttk.Button(btn_frame, text="Import Excel...", command=self._import_excel).pack(side="left", padx=2)
         ttk.Button(btn_frame, text="Refresh", command=self._load_data).pack(side="left", padx=2)
 
         ttk.Label(btn_frame, text="Search:").pack(side="left", padx=(20, 2))
@@ -589,6 +641,162 @@ class ManufacturersDialog:
             self.db.delete_manufacturer(mfr_id)
             self._load_data()
 
+    def _import_excel(self):
+        """Import manufacturers from Excel file."""
+        from pathlib import Path
+
+        filepath = filedialog.askopenfilename(
+            title="Select Manufacturer/MID Excel File",
+            filetypes=[
+                ("Excel files", "*.xlsx *.xls"),
+                ("All files", "*.*")
+            ],
+            initialdir=str(Path.cwd() / "reports")
+        )
+
+        if not filepath:
+            return
+
+        try:
+            imported, updated = self.db.import_manufacturers_from_excel(filepath)
+            self._load_data()
+            messagebox.showinfo(
+                "Import Complete",
+                f"Successfully imported {imported} new manufacturers\n"
+                f"Updated {updated} existing manufacturers"
+            )
+        except Exception as e:
+            messagebox.showerror("Import Error", f"Failed to import file:\n{str(e)}")
+
+
+class SettingsDialog:
+    """Dialog for application settings including column visibility."""
+
+    def __init__(self, parent, config, on_save=None):
+        self.config = config
+        self.on_save = on_save
+        self.column_vars = {}
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Settings")
+        self.dialog.geometry("500x600")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+
+        self._create_widgets()
+        self._load_settings()
+
+    def _create_widgets(self):
+        """Create dialog widgets."""
+        # Create notebook for different settings categories
+        notebook = ttk.Notebook(self.dialog)
+        notebook.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # === Parts Master Columns Tab ===
+        columns_frame = ttk.Frame(notebook)
+        notebook.add(columns_frame, text="Parts Master Columns")
+
+        # Instructions
+        instructions = ttk.Label(
+            columns_frame,
+            text="Select which columns to display in the Parts Master tab:",
+            font=("TkDefaultFont", 9, "bold")
+        )
+        instructions.pack(pady=10, padx=10, anchor="w")
+
+        # Scrollable frame for checkboxes
+        canvas = tk.Canvas(columns_frame)
+        scrollbar = ttk.Scrollbar(columns_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda _: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Column display names
+        column_labels = {
+            "part_number": "Part Number",
+            "description": "Description",
+            "hts_code": "HTS Code",
+            "country_origin": "Country of Origin",
+            "mid": "MID",
+            "client_code": "Client Code",
+            "steel_pct": "Steel %",
+            "aluminum_pct": "Aluminum %",
+            "copper_pct": "Copper %",
+            "wood_pct": "Wood %",
+            "auto_pct": "Auto %",
+            "non_steel_pct": "Non-Steel %",
+            "qty_unit": "Quantity Unit",
+            "sec301_exclusion_tariff": "Section 301 Exclusion",
+            "last_updated": "Last Updated"
+        }
+
+        # Create checkboxes for each column
+        for col_name, display_name in column_labels.items():
+            var = tk.BooleanVar(value=True)
+            self.column_vars[col_name] = var
+            cb = ttk.Checkbutton(
+                scrollable_frame,
+                text=display_name,
+                variable=var
+            )
+            cb.pack(anchor="w", padx=20, pady=3)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
+        scrollbar.pack(side="right", fill="y", pady=10, padx=(0, 10))
+
+        # Buttons at bottom for column tab
+        col_btn_frame = ttk.Frame(columns_frame)
+        col_btn_frame.pack(fill="x", padx=10, pady=5)
+
+        ttk.Button(col_btn_frame, text="Select All", command=self._select_all_columns).pack(side="left", padx=5)
+        ttk.Button(col_btn_frame, text="Deselect All", command=self._deselect_all_columns).pack(side="left", padx=5)
+
+        # === Main dialog buttons ===
+        btn_frame = ttk.Frame(self.dialog)
+        btn_frame.pack(fill="x", side="bottom", padx=10, pady=10)
+
+        ttk.Button(btn_frame, text="Cancel", command=self.dialog.destroy).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="Apply", command=self._apply_settings).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="OK", command=self._ok_clicked).pack(side="right", padx=5)
+
+    def _load_settings(self):
+        """Load current settings from config."""
+        column_settings = self.config.get_all_column_settings()
+        for col_name, var in self.column_vars.items():
+            var.set(column_settings.get(col_name, True))
+
+    def _select_all_columns(self):
+        """Select all column checkboxes."""
+        for var in self.column_vars.values():
+            var.set(True)
+
+    def _deselect_all_columns(self):
+        """Deselect all column checkboxes."""
+        for var in self.column_vars.values():
+            var.set(False)
+
+    def _apply_settings(self):
+        """Apply settings without closing dialog."""
+        # Save column visibility settings
+        for col_name, var in self.column_vars.items():
+            self.config.set_column_visible(col_name, var.get())
+
+        if self.on_save:
+            self.on_save()
+
+        messagebox.showinfo("Settings", "Settings applied successfully!")
+
+    def _ok_clicked(self):
+        """Apply settings and close dialog."""
+        self._apply_settings()
+        self.dialog.destroy()
+
 
 class OCRMillApp:
     """Unified OCRMill Application - Invoice Processing Suite."""
@@ -670,6 +878,8 @@ class OCRMillApp:
         # Settings menu
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Preferences...", command=self._show_settings_dialog)
+        settings_menu.add_separator()
         settings_menu.add_command(label="Change Database Location...", command=self._change_database_location)
 
         # Help menu
@@ -701,6 +911,18 @@ class OCRMillApp:
         self.cbp_frame = ttk.Frame(self.main_notebook)
         self.main_notebook.add(self.cbp_frame, text="CBP Export")
         self._create_cbp_export_tab()
+
+        # Bind tab change event for auto-refresh
+        self.main_notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+
+    def _on_tab_changed(self, event):
+        """Handle notebook tab selection changes."""
+        selected_tab = event.widget.select()
+        tab_text = event.widget.tab(selected_tab, "text")
+
+        # Auto-refresh CBP Export tab when selected
+        if tab_text == "CBP Export":
+            self._refresh_cbp_list()
 
     def _create_invoice_processing_tab(self):
         """Create the invoice processing tab content."""
@@ -874,6 +1096,54 @@ To add a new template:
 
         ttk.Button(proc_stats_frame, text="Refresh Statistics", command=self._update_proc_statistics).pack(pady=10)
 
+        # --- Output Files Tab ---
+        output_files_frame = ttk.Frame(sub_notebook, padding="5")
+        sub_notebook.add(output_files_frame, text="Output Files")
+        output_files_frame.grid_columnconfigure(0, weight=1)
+        output_files_frame.grid_rowconfigure(1, weight=1)
+
+        # Output folder display
+        folder_frame = ttk.Frame(output_files_frame)
+        folder_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        folder_frame.grid_columnconfigure(1, weight=1)
+
+        ttk.Label(folder_frame, text="Output Folder:", font=('', 9, 'bold')).grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.output_files_path_var = tk.StringVar(value=str(self.config.output_folder))
+        output_path_label = ttk.Label(folder_frame, textvariable=self.output_files_path_var, foreground="blue", cursor="hand2")
+        output_path_label.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        output_path_label.bind("<Button-1>", lambda _: self._open_output_folder())
+
+        ttk.Button(folder_frame, text="Browse Folder", command=self._open_output_folder).grid(row=0, column=2, padx=5, pady=2)
+        ttk.Button(folder_frame, text="Refresh List", command=self._refresh_output_files).grid(row=0, column=3, padx=5, pady=2)
+
+        # File list
+        list_frame = ttk.LabelFrame(output_files_frame, text="CSV Files", padding="5")
+        list_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        list_frame.grid_columnconfigure(0, weight=1)
+        list_frame.grid_rowconfigure(0, weight=1)
+
+        # Listbox with scrollbar
+        file_scroll = ttk.Scrollbar(list_frame, orient="vertical")
+        self.output_files_listbox = tk.Listbox(list_frame, yscrollcommand=file_scroll.set, font=('Consolas', 9))
+        file_scroll.config(command=self.output_files_listbox.yview)
+
+        self.output_files_listbox.grid(row=0, column=0, sticky="nsew")
+        file_scroll.grid(row=0, column=1, sticky="ns")
+
+        # Double-click to open file
+        self.output_files_listbox.bind("<Double-Button-1>", lambda _: self._open_selected_output_file())
+
+        # Buttons
+        btn_frame = ttk.Frame(list_frame)
+        btn_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
+
+        ttk.Button(btn_frame, text="Open File", command=self._open_selected_output_file).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Open in Excel", command=self._open_selected_output_file_excel).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Open Folder", command=self._open_output_folder).pack(side=tk.LEFT, padx=5)
+
+        # Initial file list load
+        self._refresh_output_files()
+
         # Initial log message
         self._queue_log("OCRMill Invoice Processing Suite started")
         self._queue_log(f"Input folder: {self.config.input_folder}")
@@ -942,34 +1212,45 @@ To add a new template:
         vsb = ttk.Scrollbar(tree_frame, orient="vertical")
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
 
-        columns = ("part_number", "description", "hts_code", "mid", "client_code",
-                  "steel_pct", "aluminum_pct", "first_seen", "last_seen")
+        # Store all possible columns
+        self.all_parts_columns = ("part_number", "description", "hts_code", "country_origin", "mid", "client_code",
+                                  "steel_pct", "aluminum_pct", "copper_pct", "wood_pct", "auto_pct", "non_steel_pct",
+                                  "qty_unit", "sec301_exclusion_tariff", "fsc_certified", "fsc_certificate_code", "last_updated")
 
-        self.parts_tree = ttk.Treeview(tree_frame, columns=columns, show="headings",
+        # Column metadata (heading text and width)
+        self.parts_column_config = {
+            "part_number": {"text": "Part Number", "width": 140},
+            "description": {"text": "Description", "width": 220},
+            "hts_code": {"text": "HTS Code", "width": 100},
+            "country_origin": {"text": "Country Origin", "width": 100},
+            "mid": {"text": "MID", "width": 150},
+            "client_code": {"text": "Client Code", "width": 100},
+            "steel_pct": {"text": "Steel %", "width": 70},
+            "aluminum_pct": {"text": "Aluminum %", "width": 80},
+            "copper_pct": {"text": "Copper %", "width": 75},
+            "wood_pct": {"text": "Wood %", "width": 70},
+            "auto_pct": {"text": "Auto %", "width": 70},
+            "non_steel_pct": {"text": "Non-Steel %", "width": 90},
+            "qty_unit": {"text": "Qty Unit", "width": 70},
+            "sec301_exclusion_tariff": {"text": "Sec301 Exclusion", "width": 120},
+            "fsc_certified": {"text": "FSC Certified", "width": 100},
+            "fsc_certificate_code": {"text": "FSC Certificate", "width": 140},
+            "last_updated": {"text": "Last Updated", "width": 90}
+        }
+
+        self.parts_tree = ttk.Treeview(tree_frame, columns=self.all_parts_columns, show="headings",
                                        yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
         vsb.config(command=self.parts_tree.yview)
         hsb.config(command=self.parts_tree.xview)
 
-        self.parts_tree.heading("part_number", text="Part Number")
-        self.parts_tree.heading("description", text="Description")
-        self.parts_tree.heading("hts_code", text="HTS Code")
-        self.parts_tree.heading("mid", text="MID")
-        self.parts_tree.heading("client_code", text="Client")
-        self.parts_tree.heading("steel_pct", text="Steel %")
-        self.parts_tree.heading("aluminum_pct", text="Aluminum %")
-        self.parts_tree.heading("first_seen", text="First Seen")
-        self.parts_tree.heading("last_seen", text="Last Seen")
+        # Configure all columns
+        for col_name, col_info in self.parts_column_config.items():
+            self.parts_tree.heading(col_name, text=col_info["text"])
+            self.parts_tree.column(col_name, width=col_info["width"])
 
-        self.parts_tree.column("part_number", width=140)
-        self.parts_tree.column("description", width=180)
-        self.parts_tree.column("hts_code", width=100)
-        self.parts_tree.column("mid", width=130)
-        self.parts_tree.column("client_code", width=80)
-        self.parts_tree.column("steel_pct", width=60)
-        self.parts_tree.column("aluminum_pct", width=70)
-        self.parts_tree.column("first_seen", width=90)
-        self.parts_tree.column("last_seen", width=90)
+        # Apply initial column visibility
+        self._apply_column_visibility()
 
         self.parts_tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
@@ -978,11 +1259,12 @@ To add a new template:
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
 
-        self.parts_tree.bind("<Double-1>", self._show_part_details)
+        self.parts_tree.bind("<Double-1>", self._edit_part)
 
         # Context menu
         self.parts_menu = tk.Menu(self.parts_tree, tearoff=0)
-        self.parts_menu.add_command(label="View Details", command=self._show_part_details)
+        self.parts_menu.add_command(label="Edit Part", command=self._edit_part)
+        self.parts_menu.add_command(label="View Details (Read-Only)", command=self._show_part_details)
         self.parts_menu.add_command(label="Set HTS Code", command=self._set_hts_code)
         self.parts_menu.add_command(label="View History", command=self._view_part_history)
         self.parts_tree.bind("<Button-3>", self._show_parts_context_menu)
@@ -1108,22 +1390,33 @@ To add a new template:
         settings_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
         settings_frame.grid_columnconfigure(1, weight=1)
 
-        # Input folder (processed CSVs)
+        # Input folder (processed CSVs) - load from config
         ttk.Label(settings_frame, text="Input Folder:").grid(row=0, column=0, sticky="w", pady=2)
-        self.cbp_input_var = tk.StringVar(value=str(Path(self.config.output_folder) / "Processed"))
+        cbp_input_path = Path(self.config.cbp_input_folder).resolve()
+        self.cbp_input_var = tk.StringVar(value=str(cbp_input_path))
         ttk.Entry(settings_frame, textvariable=self.cbp_input_var, width=50).grid(row=0, column=1, sticky="ew", padx=5)
         ttk.Button(settings_frame, text="Browse...", command=self._browse_cbp_input).grid(row=0, column=2)
 
-        # Output folder for CBP Excel files
+        # Output folder for CBP Excel files - load from config
         ttk.Label(settings_frame, text="Output Folder:").grid(row=1, column=0, sticky="w", pady=2)
-        self.cbp_output_var = tk.StringVar(value=str(Path(self.config.output_folder) / "CBP_Export"))
+        cbp_output_path = Path(self.config.cbp_output_folder).resolve()
+        self.cbp_output_var = tk.StringVar(value=str(cbp_output_path))
         ttk.Entry(settings_frame, textvariable=self.cbp_output_var, width=50).grid(row=1, column=1, sticky="ew", padx=5)
         ttk.Button(settings_frame, text="Browse...", command=self._browse_cbp_output).grid(row=1, column=2)
 
-        # Net weight input
-        ttk.Label(settings_frame, text="Net Weight (kg):").grid(row=2, column=0, sticky="w", pady=2)
+        # Total shipment weight display (auto-populated from selected CSV)
+        weight_label = ttk.Label(settings_frame, text="Total Shipment Weight (kg):")
+        weight_label.grid(row=2, column=0, sticky="w", pady=2)
         self.cbp_weight_var = tk.StringVar(value="0")
-        ttk.Entry(settings_frame, textvariable=self.cbp_weight_var, width=15).grid(row=2, column=1, sticky="w", padx=5)
+        weight_entry = ttk.Entry(settings_frame, textvariable=self.cbp_weight_var, width=15, state='readonly')
+        weight_entry.grid(row=2, column=1, sticky="w", padx=5)
+
+        # Add tooltip explaining weight usage
+        try:
+            from tktooltip import ToolTip
+            ToolTip(weight_label, msg="Auto-populated from bol_gross_weight column in selected CSV file.\nUsed to prorate weight across invoice items.", delay=0.5)
+        except ImportError:
+            pass  # Tooltip library not available
 
         # Buttons frame
         btn_frame = ttk.Frame(settings_frame)
@@ -1158,7 +1451,7 @@ To add a new template:
         self.cbp_tree.heading("status", text="Status")
 
         self.cbp_tree.column("filename", width=300)
-        self.cbp_tree.column("date", width=100)
+        self.cbp_tree.column("date", width=140)
         self.cbp_tree.column("invoices", width=80)
         self.cbp_tree.column("items", width=80)
         self.cbp_tree.column("status", width=100)
@@ -1168,6 +1461,9 @@ To add a new template:
 
         self.cbp_tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
+
+        # Bind selection event to update weight display
+        self.cbp_tree.bind("<<TreeviewSelect>>", self._on_cbp_file_select)
 
         # Refresh button
         ttk.Button(list_frame, text="Refresh List", command=self._refresh_cbp_list).grid(row=1, column=0, pady=5)
@@ -1187,14 +1483,22 @@ To add a new template:
         """Browse for CBP input folder."""
         folder = filedialog.askdirectory(initialdir=self.cbp_input_var.get())
         if folder:
-            self.cbp_input_var.set(folder)
+            # Normalize path to Windows format with backslashes
+            normalized_path = str(Path(folder).resolve())
+            self.cbp_input_var.set(normalized_path)
+            # Save to config
+            self.config.cbp_input_folder = normalized_path
             self._refresh_cbp_list()
 
     def _browse_cbp_output(self):
         """Browse for CBP output folder."""
         folder = filedialog.askdirectory(initialdir=self.cbp_output_var.get())
         if folder:
-            self.cbp_output_var.set(folder)
+            # Normalize path to Windows format with backslashes
+            normalized_path = str(Path(folder).resolve())
+            self.cbp_output_var.set(normalized_path)
+            # Save to config
+            self.config.cbp_output_folder = normalized_path
 
     def _refresh_cbp_list(self):
         """Refresh the list of available CSV files."""
@@ -1224,13 +1528,26 @@ To add a new template:
 
                 invoice_count = len(invoice_set) if invoice_set else 1
 
-                # Check if already processed
+                # Check if already processed - look for any invoice files from this CSV
                 output_folder = Path(self.cbp_output_var.get())
-                output_file = output_folder / f"{csv_file.stem}_CBP.xlsx"
-                status = "Exported" if output_file.exists() else "Pending"
+                status = "Pending"
 
-                # Get modification date
-                mod_time = datetime.fromtimestamp(csv_file.stat().st_mtime).strftime("%Y-%m-%d")
+                if invoice_set:
+                    # Check if any invoice files exist (format: {invoice_number}_{date}.xlsx)
+                    for invoice_num in invoice_set:
+                        safe_invoice = str(invoice_num).replace('/', '_').replace('\\', '_')
+                        # Look for any file starting with this invoice number
+                        matching_files = list(output_folder.glob(f"{safe_invoice}_*.xlsx"))
+                        if matching_files:
+                            status = "Exported"
+                            break
+                else:
+                    # Fallback for old format or single file
+                    if list(output_folder.glob(f"{csv_file.stem}_*.xlsx")):
+                        status = "Exported"
+
+                # Get modification date with time
+                mod_time = datetime.fromtimestamp(csv_file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
 
                 self.cbp_tree.insert("", "end", values=(
                     csv_file.name,
@@ -1241,6 +1558,46 @@ To add a new template:
                 ))
             except Exception as e:
                 self.cbp_tree.insert("", "end", values=(csv_file.name, "", "", "", f"Error: {e}"))
+
+    def _on_cbp_file_select(self, event=None):
+        """Handle CSV file selection - update weight display from bol_gross_weight column."""
+        selection = self.cbp_tree.selection()
+        if not selection:
+            self.cbp_weight_var.set("0")
+            return
+
+        try:
+            # Get selected filename
+            item = self.cbp_tree.item(selection[0])
+            filename = item['values'][0]
+            input_path = Path(self.cbp_input_var.get()) / filename
+
+            # Read CSV and extract bol_gross_weight
+            import csv
+            with open(input_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+
+            # Look for bol_gross_weight column
+            if rows and 'bol_gross_weight' in rows[0]:
+                # Get first non-empty bol_gross_weight value
+                for row in rows:
+                    bol_weight = row.get('bol_gross_weight', '').strip()
+                    if bol_weight:
+                        try:
+                            # Validate it's a number and display it
+                            weight_float = float(bol_weight)
+                            self.cbp_weight_var.set(f"{weight_float:.3f}")
+                            return
+                        except ValueError:
+                            continue
+
+            # If no bol_gross_weight found, set to 0
+            self.cbp_weight_var.set("0")
+
+        except Exception as e:
+            self.cbp_weight_var.set("0")
+            self._cbp_log(f"Error reading weight from CSV: {e}")
 
     def _cbp_log(self, message: str):
         """Log a message to the CBP log."""
@@ -1314,10 +1671,19 @@ To add a new template:
             except ValueError:
                 net_weight = 0.0
 
-            # If net weight column exists in CSV, sum it
-            if net_weight == 0 and 'net_weight' in df.columns:
-                net_weight = df['net_weight'].sum()
-                self._cbp_log(f"  Using net weight from CSV: {net_weight:.2f} kg")
+            # If net weight is 0, try to get from CSV columns
+            if net_weight == 0:
+                # First try bol_gross_weight (total BOL shipment weight)
+                if 'bol_gross_weight' in df.columns:
+                    # Use first non-null bol_gross_weight value (all items should have same BOL weight)
+                    bol_weights = df['bol_gross_weight'].dropna()
+                    if len(bol_weights) > 0:
+                        net_weight = float(bol_weights.iloc[0])
+                        self._cbp_log(f"  Using BOL gross weight from CSV: {net_weight:.2f} kg")
+                # Otherwise try summing net_weight column
+                elif 'net_weight' in df.columns:
+                    net_weight = df['net_weight'].sum()
+                    self._cbp_log(f"  Using net weight from CSV: {net_weight:.2f} kg")
 
             # Map OCRMill columns to invoice_processor expected columns
             column_mapping = {
@@ -1336,6 +1702,56 @@ To add a new template:
             for old_col, new_col in column_mapping.items():
                 if old_col in df.columns and old_col != new_col:
                     df = df.rename(columns={old_col: new_col})
+
+            # Enrich data with parts database information (material percentages, HTS codes, etc.)
+            self._cbp_log(f"  Enriching data from parts database...")
+            enriched_rows = []
+            parts_found = 0
+            parts_missing = 0
+
+            for _, row in df.iterrows():
+                part_number = row.get('part_number', '')
+                if part_number:
+                    # Look up part in database
+                    part_info = self.db.get_part_summary(part_number)
+                    if part_info:
+                        parts_found += 1
+                        # Add material percentages from database
+                        row['steel_ratio'] = part_info.get('steel_pct', 0)
+                        row['aluminum_ratio'] = part_info.get('aluminum_pct', 0)
+                        row['copper_ratio'] = part_info.get('copper_pct', 0)
+                        row['wood_ratio'] = part_info.get('wood_pct', 0)
+                        row['auto_ratio'] = part_info.get('auto_pct', 0)
+                        row['non_steel_ratio'] = part_info.get('non_steel_pct', 0)
+                        # Add HTS code if not already present
+                        if pd.isna(row.get('hts_code')) or not row.get('hts_code'):
+                            row['hts_code'] = part_info.get('hts_code', '')
+                        # Add MID if not already present
+                        if pd.isna(row.get('mid')) or not row.get('mid'):
+                            row['mid'] = part_info.get('mid', '')
+                        # Add country origin
+                        row['country_origin'] = part_info.get('country_origin', '')
+                        # Add qty_unit
+                        row['qty_unit'] = part_info.get('qty_unit', 'NO')
+                        # Add Section 301 exclusion
+                        row['Sec301_Exclusion_Tariff'] = part_info.get('sec301_exclusion_tariff', '')
+                    else:
+                        parts_missing += 1
+                        # Set defaults for missing parts
+                        row['steel_ratio'] = row.get('steel_ratio', 100)  # Default to 100% steel
+                        row['aluminum_ratio'] = row.get('aluminum_ratio', 0)
+                        row['copper_ratio'] = row.get('copper_ratio', 0)
+                        row['wood_ratio'] = row.get('wood_ratio', 0)
+                        row['auto_ratio'] = row.get('auto_ratio', 0)
+                        row['non_steel_ratio'] = row.get('non_steel_ratio', 0)
+                        row['qty_unit'] = row.get('qty_unit', 'NO')
+
+                enriched_rows.append(row)
+
+            df = pd.DataFrame(enriched_rows)
+            self._cbp_log(f"  Parts in database: {parts_found}/{len(df)}")
+            if parts_missing > 0:
+                self._cbp_log(f"  WARNING: {parts_missing} parts not found in database (using defaults)")
 
             # Get MID from first row if available
             mid = df['mid'].iloc[0] if 'mid' in df.columns and len(df) > 0 else ""
@@ -1356,16 +1772,75 @@ To add a new template:
             self._cbp_log(f"  Expanded rows: {result.expanded_row_count}")
             self._cbp_log(f"  Total value: ${result.total_value:,.2f}")
 
-            # Create output folder if needed
+            # Use user-selected output folder for split invoice files
             output_folder = Path(self.cbp_output_var.get())
             output_folder.mkdir(parents=True, exist_ok=True)
 
-            # Export to Excel
-            output_path = output_folder / f"{csv_path.stem}_CBP.xlsx"
-            export_result = processor.export(result.data, str(output_path))
+            # Rename _232_flag to 232_Status for output
+            if '_232_flag' in result.data.columns:
+                result.data['232_Status'] = result.data['_232_flag']
 
-            self._cbp_log(f"  Exported to: {output_path.name}")
+            # Convert material ratio percentages to display format (e.g., "100%" instead of "100.0")
+            for col in ['SteelRatio', 'AluminumRatio', 'CopperRatio', 'WoodRatio', 'AutoRatio', 'NonSteelRatio']:
+                if col in result.data.columns:
+                    result.data[col] = result.data[col].apply(lambda x: f"{x}%" if pd.notna(x) else "")
+
+            # Define CBP export column order (matches required output format)
+            cbp_columns = [
+                'Product No', 'ValueUSD', 'HTSCode', 'MID', 'Qty1', 'Qty2',
+                'DecTypeCd', 'CountryofMelt', 'CountryOfCast', 'PrimCountryOfSmelt',
+                'PrimSmeltFlag', 'SteelRatio', 'AluminumRatio', 'NonSteelRatio', '232_Status'
+            ]
+
+            # Filter to only columns that exist in the data
+            export_columns = [col for col in cbp_columns if col in result.data.columns]
+
+            # Log what columns are being exported
+            self._cbp_log(f"  Exporting {len(export_columns)} columns: {', '.join(export_columns)}")
+
+            # Split by invoice_number and export separate files
+            if 'invoice_number' in result.data.columns:
+                date_suffix = datetime.now().strftime("%Y%m%d")
+                invoice_numbers = result.data['invoice_number'].dropna().unique()
+                files_created = []
+
+                for invoice_num in invoice_numbers:
+                    invoice_df = result.data[result.data['invoice_number'] == invoice_num]
+                    safe_invoice = str(invoice_num).replace('/', '_').replace('\\', '_')
+                    output_path = output_folder / f"{safe_invoice}_{date_suffix}.xlsx"
+
+                    processor.export(invoice_df, str(output_path), columns=export_columns)
+                    files_created.append(output_path.name)
+
+                self._cbp_log(f"  Split into {len(files_created)} invoice file(s):")
+                for filename in sorted(files_created):
+                    self._cbp_log(f"    - {filename}")
+            else:
+                # Fallback to single file export if no invoice_number column
+                date_suffix = datetime.now().strftime("%Y%m%d")
+                output_path = output_folder / f"{csv_path.stem}_{date_suffix}.xlsx"
+                processor.export(result.data, str(output_path), columns=export_columns)
+                self._cbp_log(f"  Exported to: {output_path.name}")
+
             self._cbp_log(f"  Success!")
+
+            # Move CSV to Processed subfolder
+            input_folder = Path(self.cbp_input_var.get())
+            processed_folder = input_folder / "Processed"
+            processed_folder.mkdir(parents=True, exist_ok=True)
+
+            # Generate unique filename if destination already exists
+            dest_path = processed_folder / csv_path.name
+            if dest_path.exists():
+                base_name = csv_path.stem
+                suffix = csv_path.suffix
+                counter = 1
+                while dest_path.exists():
+                    dest_path = processed_folder / f"{base_name}_{counter}{suffix}"
+                    counter += 1
+
+            csv_path.rename(dest_path)
+            self._cbp_log(f"  Moved CSV to: Processed/{dest_path.name}")
 
             self._refresh_cbp_list()
 
@@ -1554,13 +2029,95 @@ To add a new template:
         """Browse for input folder."""
         folder = filedialog.askdirectory(initialdir=self.input_var.get())
         if folder:
-            self.input_var.set(folder)
+            # Normalize path to Windows format with backslashes
+            normalized_path = str(Path(folder).resolve())
+            self.input_var.set(normalized_path)
 
     def _browse_output(self):
         """Browse for output folder."""
         folder = filedialog.askdirectory(initialdir=self.output_var.get())
         if folder:
-            self.output_var.set(folder)
+            # Normalize path to Windows format with backslashes
+            normalized_path = str(Path(folder).resolve())
+            self.output_var.set(normalized_path)
+
+    def _refresh_output_files(self):
+        """Refresh the output files list."""
+        self.output_files_listbox.delete(0, tk.END)
+
+        output_folder = Path(self.config.output_folder)
+        if not output_folder.exists():
+            return
+
+        # Get all CSV files from output folder and subfolders
+        csv_files = []
+        for pattern in ['*.csv', '**/*.csv']:
+            csv_files.extend(output_folder.glob(pattern))
+
+        # Sort by modification time (newest first)
+        csv_files = sorted(csv_files, key=lambda p: p.stat().st_mtime, reverse=True)
+
+        # Add to listbox with relative paths
+        for file_path in csv_files:
+            try:
+                rel_path = file_path.relative_to(output_folder)
+                self.output_files_listbox.insert(tk.END, str(rel_path))
+            except ValueError:
+                # If relative path fails, use absolute
+                self.output_files_listbox.insert(tk.END, str(file_path))
+
+    def _open_output_folder(self):
+        """Open the output folder in file explorer."""
+        output_folder = Path(self.config.output_folder)
+        if output_folder.exists():
+            try:
+                os.startfile(str(output_folder))
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open folder: {e}")
+        else:
+            messagebox.showwarning("Warning", f"Output folder does not exist:\n{output_folder}")
+
+    def _open_selected_output_file(self):
+        """Open the selected output file with default application."""
+        selection = self.output_files_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("No Selection", "Please select a file to open.")
+            return
+
+        rel_path = self.output_files_listbox.get(selection[0])
+        file_path = Path(self.config.output_folder) / rel_path
+
+        if file_path.exists():
+            try:
+                os.startfile(str(file_path))
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open file: {e}")
+        else:
+            messagebox.showerror("Error", f"File not found:\n{file_path}")
+
+    def _open_selected_output_file_excel(self):
+        """Open the selected output file in Excel."""
+        selection = self.output_files_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("No Selection", "Please select a file to open.")
+            return
+
+        rel_path = self.output_files_listbox.get(selection[0])
+        file_path = Path(self.config.output_folder) / rel_path
+
+        if file_path.exists():
+            try:
+                # Try to open with Excel specifically
+                excel_path = "excel.exe"
+                subprocess.run([excel_path, str(file_path)], check=False)
+            except Exception:
+                # Fallback to default application
+                try:
+                    os.startfile(str(file_path))
+                except Exception as e2:
+                    messagebox.showerror("Error", f"Could not open file: {e2}")
+        else:
+            messagebox.showerror("Error", f"File not found:\n{file_path}")
 
     def _save_settings(self):
         """Save current settings."""
@@ -1721,12 +2278,20 @@ To add a new template:
                 part.get('part_number', ''),
                 part.get('description', ''),
                 part.get('hts_code', ''),
+                part.get('country_origin', ''),
                 part.get('mid', ''),
                 part.get('client_code', ''),
-                f"{part.get('avg_steel_pct', 0):.0f}%" if part.get('avg_steel_pct') else '',
-                f"{part.get('avg_aluminum_pct', 0):.0f}%" if part.get('avg_aluminum_pct') else '',
-                part.get('first_seen_date', '')[:10] if part.get('first_seen_date') else '',
-                part.get('last_seen_date', '')[:10] if part.get('last_seen_date') else ''
+                f"{part.get('steel_pct', 0):.0f}" if part.get('steel_pct') else '0',
+                f"{part.get('aluminum_pct', 0):.0f}" if part.get('aluminum_pct') else '0',
+                f"{part.get('copper_pct', 0):.0f}" if part.get('copper_pct') else '0',
+                f"{part.get('wood_pct', 0):.0f}" if part.get('wood_pct') else '0',
+                f"{part.get('auto_pct', 0):.0f}" if part.get('auto_pct') else '0',
+                f"{part.get('non_steel_pct', 0):.0f}" if part.get('non_steel_pct') else '0',
+                part.get('qty_unit', ''),
+                part.get('sec301_exclusion_tariff', ''),
+                part.get('fsc_certified', ''),
+                part.get('fsc_certificate_code', ''),
+                part.get('last_updated', '')[:10] if part.get('last_updated') else ''
             )
             self.parts_tree.insert("", "end", values=values)
 
@@ -1750,16 +2315,39 @@ To add a new template:
                 part.get('part_number', ''),
                 part.get('description', ''),
                 part.get('hts_code', ''),
+                part.get('country_origin', ''),
                 part.get('mid', ''),
                 part.get('client_code', ''),
-                f"{part.get('avg_steel_pct', 0):.0f}%" if part.get('avg_steel_pct') else '',
-                f"{part.get('avg_aluminum_pct', 0):.0f}%" if part.get('avg_aluminum_pct') else '',
-                part.get('first_seen_date', '')[:10] if part.get('first_seen_date') else '',
-                part.get('last_seen_date', '')[:10] if part.get('last_seen_date') else ''
+                f"{part.get('steel_pct', 0):.0f}" if part.get('steel_pct') else '0',
+                f"{part.get('aluminum_pct', 0):.0f}" if part.get('aluminum_pct') else '0',
+                f"{part.get('copper_pct', 0):.0f}" if part.get('copper_pct') else '0',
+                f"{part.get('wood_pct', 0):.0f}" if part.get('wood_pct') else '0',
+                f"{part.get('auto_pct', 0):.0f}" if part.get('auto_pct') else '0',
+                f"{part.get('non_steel_pct', 0):.0f}" if part.get('non_steel_pct') else '0',
+                part.get('qty_unit', ''),
+                part.get('sec301_exclusion_tariff', ''),
+                part.get('fsc_certified', ''),
+                part.get('fsc_certificate_code', ''),
+                part.get('last_updated', '')[:10] if part.get('last_updated') else ''
             )
             self.parts_tree.insert("", "end", values=values)
 
         self.status_var.set(f"Found {len(parts)} parts matching '{search_term}'")
+
+    def _apply_column_visibility(self):
+        """Apply column visibility settings from config."""
+        if not hasattr(self, 'parts_tree'):
+            return
+
+        # Get displaycolumns as a list (convert from tuple if needed)
+        visible_cols = []
+
+        for col_name in self.all_parts_columns:
+            if self.config.get_column_visible(col_name):
+                visible_cols.append(col_name)
+
+        # Set the displaycolumns to only show visible columns
+        self.parts_tree['displaycolumns'] = visible_cols
 
     def _update_parts_statistics(self):
         """Update the database statistics display."""
@@ -1794,8 +2382,15 @@ Top 10 Parts by Value
 
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            SELECT part_number, invoice_count, total_quantity, total_value, hts_code
-            FROM parts
+            SELECT
+                po.part_number,
+                COUNT(DISTINCT po.invoice_number) as invoice_count,
+                SUM(po.quantity) as total_quantity,
+                SUM(po.total_price) as total_value,
+                p.hts_code
+            FROM part_occurrences po
+            LEFT JOIN parts p ON po.part_number = p.part_number
+            GROUP BY po.part_number
             ORDER BY total_value DESC
             LIMIT 10
         """)
@@ -1855,26 +2450,209 @@ Part Number: {part_number}
 
 HTS Code:           {part.get('hts_code') or 'Not assigned'}
 Description:        {part.get('description') or 'N/A'}
+MID:                {part.get('mid') or 'N/A'}
+Client Code:        {part.get('client_code') or 'N/A'}
 
-Usage Statistics
+Material Composition
 {'-' * 60}
-Times Used:         {part.get('invoice_count', 0)} invoices
-Total Quantity:     {part.get('total_quantity', 0):.2f}
-Total Value:        ${part.get('total_value', 0):,.2f}
-
-Material Composition (Average)
-{'-' * 60}
-Steel:              {part.get('avg_steel_pct', 0):.0f}%
-Aluminum:           {part.get('avg_aluminum_pct', 0):.0f}%
-Net Weight:         {part.get('avg_net_weight', 0):.2f} kg
+Steel:              {part.get('steel_pct', 0):.0f}%
+Aluminum:           {part.get('aluminum_pct', 0):.0f}%
+Copper:             {part.get('copper_pct', 0):.0f}%
+Wood:               {part.get('wood_pct', 0):.0f}%
+Auto:               {part.get('auto_pct', 0):.0f}%
 
 Timeline
 {'-' * 60}
-First Seen:         {part.get('first_seen_date', 'N/A')}
-Last Seen:          {part.get('last_seen_date', 'N/A')}
+Last Updated:       {part.get('last_updated', 'N/A')}
 """
         text.insert("1.0", details)
         text.config(state="disabled")
+
+    def _edit_part(self, event=None):
+        """Edit selected part information."""
+        selection = self.parts_tree.selection()
+        if not selection:
+            return
+
+        item = self.parts_tree.item(selection[0])
+        part_number = item['values'][0]
+
+        # Get current part data
+        part = self.db.get_part_summary(part_number)
+        if not part:
+            messagebox.showerror("Error", f"Part {part_number} not found")
+            return
+
+        # Create edit dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Edit Part - {part_number}")
+        dialog.geometry("500x600")
+
+        # Create scrollable frame
+        canvas = tk.Canvas(dialog)
+        scrollbar = ttk.Scrollbar(dialog, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda _: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Part Number (read-only)
+        ttk.Label(scrollable_frame, text="Part Number:", font=("", 10, "bold")).grid(row=0, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(scrollable_frame, text=part_number).grid(row=0, column=1, sticky="w", padx=5, pady=5)
+
+        # Description
+        ttk.Label(scrollable_frame, text="Description:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        desc_var = tk.StringVar(value=part.get('description', ''))
+        desc_entry = ttk.Entry(scrollable_frame, textvariable=desc_var, width=40)
+        desc_entry.grid(row=1, column=1, sticky="w", padx=5, pady=5)
+
+        # HTS Code
+        ttk.Label(scrollable_frame, text="HTS Code:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
+        hts_var = tk.StringVar(value=part.get('hts_code', ''))
+        hts_entry = ttk.Entry(scrollable_frame, textvariable=hts_var, width=40)
+        hts_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+
+        # Country Origin
+        ttk.Label(scrollable_frame, text="Country Origin:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
+        country_var = tk.StringVar(value=part.get('country_origin', ''))
+        country_entry = ttk.Entry(scrollable_frame, textvariable=country_var, width=40)
+        country_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+
+        # MID
+        ttk.Label(scrollable_frame, text="MID:").grid(row=4, column=0, sticky="e", padx=5, pady=5)
+        mid_var = tk.StringVar(value=part.get('mid', ''))
+        mid_entry = ttk.Entry(scrollable_frame, textvariable=mid_var, width=40)
+        mid_entry.grid(row=4, column=1, sticky="w", padx=5, pady=5)
+
+        # Client Code
+        ttk.Label(scrollable_frame, text="Client Code:").grid(row=5, column=0, sticky="e", padx=5, pady=5)
+        client_var = tk.StringVar(value=part.get('client_code', ''))
+        client_entry = ttk.Entry(scrollable_frame, textvariable=client_var, width=40)
+        client_entry.grid(row=5, column=1, sticky="w", padx=5, pady=5)
+
+        # Steel %
+        ttk.Label(scrollable_frame, text="Steel %:").grid(row=6, column=0, sticky="e", padx=5, pady=5)
+        steel_var = tk.StringVar(value=str(part.get('steel_pct', 0)))
+        steel_entry = ttk.Entry(scrollable_frame, textvariable=steel_var, width=40)
+        steel_entry.grid(row=6, column=1, sticky="w", padx=5, pady=5)
+
+        # Aluminum %
+        ttk.Label(scrollable_frame, text="Aluminum %:").grid(row=7, column=0, sticky="e", padx=5, pady=5)
+        aluminum_var = tk.StringVar(value=str(part.get('aluminum_pct', 0)))
+        aluminum_entry = ttk.Entry(scrollable_frame, textvariable=aluminum_var, width=40)
+        aluminum_entry.grid(row=7, column=1, sticky="w", padx=5, pady=5)
+
+        # Copper %
+        ttk.Label(scrollable_frame, text="Copper %:").grid(row=8, column=0, sticky="e", padx=5, pady=5)
+        copper_var = tk.StringVar(value=str(part.get('copper_pct', 0)))
+        copper_entry = ttk.Entry(scrollable_frame, textvariable=copper_var, width=40)
+        copper_entry.grid(row=8, column=1, sticky="w", padx=5, pady=5)
+
+        # Wood %
+        ttk.Label(scrollable_frame, text="Wood %:").grid(row=9, column=0, sticky="e", padx=5, pady=5)
+        wood_var = tk.StringVar(value=str(part.get('wood_pct', 0)))
+        wood_entry = ttk.Entry(scrollable_frame, textvariable=wood_var, width=40)
+        wood_entry.grid(row=9, column=1, sticky="w", padx=5, pady=5)
+
+        # Auto %
+        ttk.Label(scrollable_frame, text="Auto %:").grid(row=10, column=0, sticky="e", padx=5, pady=5)
+        auto_var = tk.StringVar(value=str(part.get('auto_pct', 0)))
+        auto_entry = ttk.Entry(scrollable_frame, textvariable=auto_var, width=40)
+        auto_entry.grid(row=10, column=1, sticky="w", padx=5, pady=5)
+
+        # Non-Steel %
+        ttk.Label(scrollable_frame, text="Non-Steel %:").grid(row=11, column=0, sticky="e", padx=5, pady=5)
+        non_steel_var = tk.StringVar(value=str(part.get('non_steel_pct', 0)))
+        non_steel_entry = ttk.Entry(scrollable_frame, textvariable=non_steel_var, width=40)
+        non_steel_entry.grid(row=11, column=1, sticky="w", padx=5, pady=5)
+
+        # Qty Unit
+        ttk.Label(scrollable_frame, text="Qty Unit:").grid(row=12, column=0, sticky="e", padx=5, pady=5)
+        qty_unit_var = tk.StringVar(value=part.get('qty_unit', ''))
+        qty_unit_entry = ttk.Entry(scrollable_frame, textvariable=qty_unit_var, width=40)
+        qty_unit_entry.grid(row=12, column=1, sticky="w", padx=5, pady=5)
+
+        # Section 301 Exclusion Tariff
+        ttk.Label(scrollable_frame, text="Sec301 Exclusion:").grid(row=13, column=0, sticky="e", padx=5, pady=5)
+        sec301_var = tk.StringVar(value=part.get('sec301_exclusion_tariff', ''))
+        sec301_entry = ttk.Entry(scrollable_frame, textvariable=sec301_var, width=40)
+        sec301_entry.grid(row=13, column=1, sticky="w", padx=5, pady=5)
+
+        # FSC Certified
+        ttk.Label(scrollable_frame, text="FSC Certified:").grid(row=14, column=0, sticky="e", padx=5, pady=5)
+        fsc_certified_var = tk.StringVar(value=part.get('fsc_certified', ''))
+        fsc_certified_entry = ttk.Entry(scrollable_frame, textvariable=fsc_certified_var, width=40)
+        fsc_certified_entry.grid(row=14, column=1, sticky="w", padx=5, pady=5)
+
+        # FSC Certificate Code
+        ttk.Label(scrollable_frame, text="FSC Certificate Code:").grid(row=15, column=0, sticky="e", padx=5, pady=5)
+        fsc_cert_code_var = tk.StringVar(value=part.get('fsc_certificate_code', ''))
+        fsc_cert_code_entry = ttk.Entry(scrollable_frame, textvariable=fsc_cert_code_var, width=40)
+        fsc_cert_code_entry.grid(row=15, column=1, sticky="w", padx=5, pady=5)
+
+        def save_changes():
+            try:
+                # Prepare update data
+                cursor = self.db.conn.cursor()
+                cursor.execute("""
+                    UPDATE parts SET
+                        description = ?,
+                        hts_code = ?,
+                        country_origin = ?,
+                        mid = ?,
+                        client_code = ?,
+                        steel_pct = ?,
+                        aluminum_pct = ?,
+                        copper_pct = ?,
+                        wood_pct = ?,
+                        auto_pct = ?,
+                        non_steel_pct = ?,
+                        qty_unit = ?,
+                        sec301_exclusion_tariff = ?,
+                        fsc_certified = ?,
+                        fsc_certificate_code = ?,
+                        last_updated = datetime('now')
+                    WHERE part_number = ?
+                """, (
+                    desc_var.get().strip(),
+                    hts_var.get().strip(),
+                    country_var.get().strip(),
+                    mid_var.get().strip(),
+                    client_var.get().strip(),
+                    int(steel_var.get() or 0),
+                    int(aluminum_var.get() or 0),
+                    int(copper_var.get() or 0),
+                    int(wood_var.get() or 0),
+                    int(auto_var.get() or 0),
+                    int(non_steel_var.get() or 0),
+                    qty_unit_var.get().strip(),
+                    sec301_var.get().strip(),
+                    fsc_certified_var.get().strip(),
+                    fsc_cert_code_var.get().strip(),
+                    part_number
+                ))
+                self.db.conn.commit()
+                messagebox.showinfo("Success", f"Part {part_number} updated successfully")
+                self._refresh_parts_data()
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to update part: {e}")
+
+        # Buttons frame
+        button_frame = ttk.Frame(scrollable_frame)
+        button_frame.grid(row=16, column=0, columnspan=2, pady=20)
+
+        ttk.Button(button_frame, text="Save", command=save_changes).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side="left", padx=5)
+
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        scrollbar.pack(side="right", fill="y")
 
     def _set_hts_code(self):
         """Set HTS code for selected part."""
@@ -2020,6 +2798,10 @@ Last Seen:          {part.get('last_seen_date', 'N/A')}
         """Show the manufacturers/MID management dialog."""
         ManufacturersDialog(self.root, self.db)
 
+    def _show_settings_dialog(self):
+        """Show settings dialog."""
+        SettingsDialog(self.root, self.config, on_save=self._apply_column_visibility)
+
     def _show_about(self):
         """Show about dialog."""
         messagebox.showinfo(
@@ -2133,6 +2915,10 @@ Last Seen:          {part.get('last_seen_date', 'N/A')}
         # Save window position/size
         self.config.set("window.width", self.root.winfo_width())
         self.config.set("window.height", self.root.winfo_height())
+
+        # Save CBP export settings (weight is not saved - auto-populated from CSV)
+        self.config.cbp_input_folder = self.cbp_input_var.get()
+        self.config.cbp_output_folder = self.cbp_output_var.get()
 
         self.root.destroy()
 

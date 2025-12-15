@@ -1,0 +1,8 @@
+invoice_number,project_number,part_number,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight
+2025602081,US25A0258,PRX345-0029-US23A0057,6.00,4522.86,,,,,,,
+2025602081,US25A0258,SLU899,0.06,308.38,,,,,,,
+2025602081,US25A0258,SLU004,2.00,958.54,,,,,,,
+2025602081,US25A0258,ND502,12.00,91.10,,,,,,,
+2025602081,US25A0258,SLU899,0.06,6.21,,,,,,,
+2025602081,US25A0258,OBAL160,2.00,182.12,,,,,,,
+2025602081,US25A0258,Celkem,10.900,10900.45,,,,,,,

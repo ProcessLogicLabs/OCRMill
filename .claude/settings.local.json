@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(python debug_pdf.py:*)",
+      "Bash(ls:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(.venvScriptspip.exe install pandas openpyxl)",
+      "Bash(\".venv/Scripts/pip.exe\" install pandas openpyxl)",
+      "Bash(\".venv/Scripts/python.exe\":*)",
+      "Bash(dir \"c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\Resources\")",
+      "Bash(move \"c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\parts_database.db\" \"c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\Resources\\parts_database.db\")",
+      "Bash(cmd /c move:*)",
+      "Bash(\".venv/Scripts/python.exe\" -c \"from parts_database import PartsDatabase; db = PartsDatabase(); print(''Manufacturers:'', db.get_all_manufacturers())\")",
+      "Bash(cmd /c \"dir c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\*.db 2>nul & dir c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\Resources\\*.db 2>nul\")",
+      "Bash(cmd /c \"del c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\Resources\\parts_database.db && copy c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\parts_database.db c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\Resources\\parts_database.db\")",
+      "Bash(\".venv/Scripts/python.exe\" -c \"\nfrom parts_database import PartsDatabase\ndb = PartsDatabase()\n\nmanufacturers = db.get_all_manufacturers()\nprint(f''Found {len(manufacturers)} manufacturers'')\nfor m in manufacturers:\n    print(f''  {m[\"\"company_name\"\"]} -> MID: {m[\"\"mid\"\"]}'')\n\nprint()\nprint(''Testing lookups:'')\ntest_names = [''mmcité'', ''mmcite'', ''MMCITE'', ''MMCITE AS'', ''MMCITE BRAZIL'']\nfor name in test_names:\n    result = db.get_manufacturer_by_name(name)\n    print(f''  \"\"{name}\"\" -> {result[\"\"mid\"\"] if result else \"\"NOT FOUND\"\"}'')\")",
+      "Bash(\".venv/Scripts/python.exe\" -c \"\nfrom parts_database import PartsDatabase\ndb = PartsDatabase()\n\nprint(''Testing lookups:'')\ntest_names = [''mmcité'', ''mmcite'', ''MMCITE AS'', ''mmcité s.r.o.'', ''MMCITE BRAZIL'', ''mmcité do Brasil'', ''OUT SIDER'', ''Out Sider AS'']\nfor name in test_names:\n    result = db.get_manufacturer_by_name(name)\n    print(f''  \"\"{name}\"\" -> {result[\"\"mid\"\"] if result else \"\"NOT FOUND\"\"}'')\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python -c \"import sys; sys.path.insert(0, ''DerivativeMill/DerivativeMill''); from invoice_processor import InvoiceProcessor; print(''Import successful'')\")",
+      "Bash(git push:*)",
+      "Bash(python test_bol_extraction.py:*)",
+      "Bash(dir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

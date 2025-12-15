@@ -25,12 +25,13 @@ class MMCiteCzechTemplate(BaseTemplate):
     
     extra_columns = [
         'steel_pct',
-        'steel_kg', 
+        'steel_kg',
         'steel_value',
         'aluminum_pct',
         'aluminum_kg',
         'aluminum_value',
-        'net_weight'
+        'net_weight',
+        'bol_gross_weight'
     ]
     
     def can_process(self, text: str) -> bool:
@@ -419,7 +420,7 @@ class MMCiteCzechTemplate(BaseTemplate):
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 # Return normalized name that matches database entry
-                return "MMCITE AS"
+                return "MMCITE S/A CZECH REPUBLIC"
 
         # Pattern 2: Look for "Supplier:" or "Seller:" or "Dodavatel:" (Czech for supplier)
         supplier_patterns = [

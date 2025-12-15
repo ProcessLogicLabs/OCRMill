@@ -42,6 +42,8 @@ class SampleTemplate(BaseTemplate):
     # Standard columns (invoice_number, project_number, part_number, quantity, total_price)
     # are always included
     extra_columns = [
+        # 'net_weight',  # Item/invoice weight in kg (can be populated from BOL)
+        # 'bol_gross_weight',  # Total BOL shipment weight in kg (for proration)
         # 'unit_price',
         # 'tax_rate',
         # 'custom_field'

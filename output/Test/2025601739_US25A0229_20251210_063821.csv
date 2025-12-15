@@ -1,0 +1,5 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025601739,US25A0229,ELK110-002000,mmcité product ELK110-002000,3.00,1288.14,,,,,,,,
+2025601739,US25A0229,KR120-002000,mmcité product KR120-002000,3.00,1858.43,,,,,,,,
+2025601739,US25A0229,NDZ04,Bollard,12.00,21.90,,,,,,,,7308.90.6000
+2025601739,US25A0229,ND507,Bollard - Model 507,3.00,25.38,,,,,,,,7308.90.6000

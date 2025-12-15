@@ -1,0 +1,99 @@
+Debugging: input\Failed\2025601736 - mmcité usa - US25A0203 (5).pdf
+================================================================================
+
+1. EXTRACTING TEXT FROM PDF...
+--------------------------------------------------------------------------------
+Page 1: 2107 characters extracted
+Page 2: 1387 characters extracted
+Page 3: 1230 characters extracted
+Page 4: 1986 characters extracted
+Page 5: 1872 characters extracted
+Page 6: 42 characters extracted
+Page 7: 1274 characters extracted
+Page 8: 1238 characters extracted
+Page 9: 1846 characters extracted
+Page 10: 1056 characters extracted
+Page 11: 1094 characters extracted
+Page 12: 1976 characters extracted
+Page 13: 2578 characters extracted
+Page 14: 1799 characters extracted
+Page 15: 1244 characters extracted
+Page 16: 1842 characters extracted
+Page 17: 1298 characters extracted
+Page 18: 1227 characters extracted
+Page 19: 1081 characters extracted
+Page 20: 893 characters extracted
+Page 21: 1887 characters extracted
+Page 22: 1832 characters extracted
+Page 23: 1244 characters extracted
+Page 24: 1600 characters extracted
+Page 25: 1015 characters extracted
+Page 26: 1781 characters extracted
+Page 27: 998 characters extracted
+Page 28: 1297 characters extracted
+Page 29: 1015 characters extracted
+Page 30: 869 characters extracted
+Page 31: 1015 characters extracted
+Page 32: 841 characters extracted
+Page 33: 1015 characters extracted
+Page 34: 1149 characters extracted
+Page 35: 1015 characters extracted
+Page 36: 1486 characters extracted
+Page 37: 1337 characters extracted
+Page 38: 1451 characters extracted
+Page 39: 1015 characters extracted
+Page 41: 2824 characters extracted
+Page 42: 2009 characters extracted
+Page 43: 1957 characters extracted
+Page 44: 2824 characters extracted
+Page 45: 2009 characters extracted
+Page 46: 1957 characters extracted
+Page 47: 2824 characters extracted
+Page 48: 2009 characters extracted
+Page 50: 2824 characters extracted
+Page 51: 2009 characters extracted
+Page 52: 2247 characters extracted
+Page 53: 2824 characters extracted
+Page 54: 2009 characters extracted
+Page 55: 2247 characters extracted
+Page 56: 2824 characters extracted
+Page 57: 2009 characters extracted
+Page 59: 2824 characters extracted
+Page 60: 2009 characters extracted
+Page 61: 1956 characters extracted
+Page 62: 2824 characters extracted
+Page 63: 2009 characters extracted
+Page 64: 1956 characters extracted
+Page 65: 2824 characters extracted
+Page 66: 2009 characters extracted
+Page 67: 1308 characters extracted
+Page 68: 3747 characters extracted
+Page 70: 1816 characters extracted
+Page 71: 82 characters extracted
+
+Total text length: 115769 characters
+
+First 500 characters:
+--------------------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\hpayne\Documents\DevHouston\OCRMill\debug_pdf.py", line 37, in debug_pdf
+    print(full_text[:500])
+    ~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\hpayne\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u0159' in position 150: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\hpayne\Documents\DevHouston\OCRMill\debug_pdf.py", line 106, in <module>
+    debug_pdf(pdf_path)
+    ~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\hpayne\Documents\DevHouston\OCRMill\debug_pdf.py", line 39, in debug_pdf
+    print(full_text[:500].encode('utf-8', errors='replace').decode('utf-8'))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\hpayne\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u0159' in position 150: character maps to <undefined>

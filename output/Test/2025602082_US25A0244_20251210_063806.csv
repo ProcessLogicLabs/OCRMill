@@ -1,0 +1,7 @@
+invoice_number,project_number,part_number,description,quantity,total_price,steel_pct,steel_kg,steel_value,aluminum_pct,aluminum_kg,aluminum_value,net_weight,hts_code
+2025602082,US25A0244,SE101-002000,mmcité product SE101-002000,9.00,1001.34,,,,,,,,
+2025602082,US25A0244,NNK365-002000,mmcité product NNK365-002000,4.00,1447.18,,,,,,,,
+2025602082,US25A0244,NNK366-002000,mmcité product NNK366-002000,5.00,2123.68,,,,,,,,
+2025602082,US25A0244,NNK265-002000,mmcité product NNK265-002000,4.00,1750.60,,,,,,,,
+2025602082,US25A0244,NNK266-002000,mmcité product NNK266-002000,5.00,2504.37,,,,,,,,
+2025602082,US25A0244,ND501,Bollard - Model 501,27.00,276.08,,,,,,,,7308.90.6000

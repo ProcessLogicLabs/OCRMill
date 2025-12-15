@@ -38,36 +38,38 @@ class PartsDatabase:
         self.conn.row_factory = sqlite3.Row
         cursor = self.conn.cursor()
 
-        # Parts master table
+        # Parts master table - matches parts_MMCITE.xlsx format
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS parts (
                 part_number TEXT PRIMARY KEY,
                 description TEXT,
                 hts_code TEXT,
-                hts_description TEXT,
-                first_seen_date TEXT,
-                last_seen_date TEXT,
-                total_quantity REAL DEFAULT 0,
-                total_value REAL DEFAULT 0,
-                invoice_count INTEGER DEFAULT 0,
-                avg_steel_pct REAL,
-                avg_aluminum_pct REAL,
-                avg_net_weight REAL,
+                country_origin TEXT,
                 mid TEXT,
                 client_code TEXT,
+                steel_pct REAL DEFAULT 0,
+                aluminum_pct REAL DEFAULT 0,
+                copper_pct REAL DEFAULT 0,
+                wood_pct REAL DEFAULT 0,
+                auto_pct REAL DEFAULT 0,
+                non_steel_pct REAL DEFAULT 0,
+                qty_unit TEXT DEFAULT 'NO',
+                sec301_exclusion_tariff TEXT,
+                last_updated TEXT,
                 notes TEXT
             )
         """)
 
-        # Add new columns if they don't exist (for existing databases)
-        try:
-            cursor.execute("ALTER TABLE parts ADD COLUMN mid TEXT")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-        try:
-            cursor.execute("ALTER TABLE parts ADD COLUMN client_code TEXT")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
+        # Note: All columns are now in the main schema above
+        # Migration from old schema is handled by rebuild_parts_database.py
+
+        # Add FSC certification column if it doesn't exist (migration)
+        cursor.execute("PRAGMA table_info(parts)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'fsc_certified' not in columns:
+            cursor.execute("ALTER TABLE parts ADD COLUMN fsc_certified TEXT")
+        if 'fsc_certificate_code' not in columns:
+            cursor.execute("ALTER TABLE parts ADD COLUMN fsc_certificate_code TEXT")
 
         # Part occurrences - tracks each time a part appears on an invoice
         cursor.execute("""
@@ -180,6 +182,15 @@ class PartsDatabase:
             if not part_data.get('description'):
                 part_data['description'] = self.description_extractor.extract_description(part_number)
 
+            # Check for FSC certification in description
+            description = part_data.get('description', '')
+            if 'FSC 100%' in description or 'FSC100%' in description.replace(' ', ''):
+                part_data['fsc_certified'] = 'FSC 100%'
+                part_data['fsc_certificate_code'] = 'PBN-COC-065387'
+            elif 'FSC' in description.upper():
+                # Generic FSC mention without 100%
+                part_data['fsc_certified'] = 'FSC'
+
             # Try to find HTS code if not provided
             if not part_data.get('hts_code'):
                 # First try from description
@@ -240,76 +251,88 @@ class PartsDatabase:
             return True
 
     def _update_part_master(self, part_number: str, part_data: Dict):
-        """Update the parts master table with aggregated data."""
+        """Update the parts master table with latest occurrence data."""
         cursor = self.conn.cursor()
 
         # Check if part exists
         cursor.execute("SELECT part_number FROM parts WHERE part_number = ?", (part_number,))
         exists = cursor.fetchone() is not None
 
-        # Calculate aggregates from all occurrences
+        # Get latest material percentages from most recent occurrence
         cursor.execute("""
             SELECT
-                COUNT(*) as invoice_count,
-                SUM(quantity) as total_quantity,
-                SUM(total_price) as total_value,
-                AVG(steel_pct) as avg_steel_pct,
-                AVG(aluminum_pct) as avg_aluminum_pct,
-                AVG(net_weight) as avg_net_weight,
-                MIN(processed_date) as first_seen,
-                MAX(processed_date) as last_seen
+                steel_pct,
+                aluminum_pct,
+                processed_date
             FROM part_occurrences
             WHERE part_number = ?
+            ORDER BY processed_date DESC
+            LIMIT 1
         """, (part_number,))
 
-        stats = cursor.fetchone()
+        latest = cursor.fetchone()
 
         if exists:
-            # Update existing part
+            # Update existing part with latest occurrence data
+            # Only update fields if new data is provided (not NULL and not empty string)
+            # HTS_CODE is NEVER updated from PDF - database is master source of truth
+            def clean_value(value):
+                """Return value if non-empty, otherwise None to prevent overwriting."""
+                if value is None:
+                    return None
+                str_val = str(value).strip()
+                return str_val if str_val else None
+
+            new_mid = clean_value(part_data.get('mid'))
+            new_country = clean_value(part_data.get('country_origin'))
+            new_client = clean_value(part_data.get('client_code'))
+            new_fsc_cert = clean_value(part_data.get('fsc_certified'))
+            new_fsc_code = clean_value(part_data.get('fsc_certificate_code'))
+            new_description = clean_value(part_data.get('description'))
+
             cursor.execute("""
                 UPDATE parts SET
                     description = COALESCE(?, description),
-                    last_seen_date = ?,
-                    total_quantity = ?,
-                    total_value = ?,
-                    invoice_count = ?,
-                    avg_steel_pct = ?,
-                    avg_aluminum_pct = ?,
-                    avg_net_weight = ?,
-                    hts_code = COALESCE(?, hts_code)
+                    steel_pct = COALESCE(?, steel_pct),
+                    aluminum_pct = COALESCE(?, aluminum_pct),
+                    mid = COALESCE(?, mid),
+                    country_origin = COALESCE(?, country_origin),
+                    client_code = COALESCE(?, client_code),
+                    fsc_certified = COALESCE(?, fsc_certified),
+                    fsc_certificate_code = COALESCE(?, fsc_certificate_code),
+                    last_updated = ?
                 WHERE part_number = ?
             """, (
-                part_data.get('description'),
-                stats['last_seen'],
-                stats['total_quantity'] or 0,
-                stats['total_value'] or 0,
-                stats['invoice_count'],
-                stats['avg_steel_pct'],
-                stats['avg_aluminum_pct'],
-                stats['avg_net_weight'],
-                part_data.get('hts_code'),
+                new_description,
+                latest['steel_pct'] if latest else part_data.get('steel_pct'),
+                latest['aluminum_pct'] if latest else part_data.get('aluminum_pct'),
+                new_mid,
+                new_country,
+                new_client,
+                new_fsc_cert,
+                new_fsc_code,
+                datetime.now().isoformat(),
                 part_number
             ))
         else:
             # Insert new part
             cursor.execute("""
                 INSERT INTO parts (
-                    part_number, description, hts_code, first_seen_date, last_seen_date,
-                    total_quantity, total_value, invoice_count,
-                    avg_steel_pct, avg_aluminum_pct, avg_net_weight
+                    part_number, description, hts_code, steel_pct, aluminum_pct,
+                    mid, country_origin, client_code, fsc_certified, fsc_certificate_code, last_updated
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 part_number,
                 part_data.get('description'),
                 part_data.get('hts_code'),
-                stats['first_seen'],
-                stats['last_seen'],
-                stats['total_quantity'] or 0,
-                stats['total_value'] or 0,
-                stats['invoice_count'],
-                stats['avg_steel_pct'],
-                stats['avg_aluminum_pct'],
-                stats['avg_net_weight']
+                latest['steel_pct'] if latest else part_data.get('steel_pct'),
+                latest['aluminum_pct'] if latest else part_data.get('aluminum_pct'),
+                part_data.get('mid'),
+                part_data.get('country_origin'),
+                part_data.get('client_code'),
+                part_data.get('fsc_certified'),
+                part_data.get('fsc_certificate_code'),
+                datetime.now().isoformat()
             ))
 
     def load_hts_mapping(self, xlsx_path: Path):
@@ -433,10 +456,17 @@ class PartsDatabase:
                     cursor.execute("SELECT part_number FROM parts WHERE part_number = ?", (part_number,))
                     exists = cursor.fetchone() is not None
 
-                    # Prepare data
+                    # Prepare data - support both old and new column formats
                     hts_code = str(row.get('hts_code', '')) if pd.notna(row.get('hts_code')) else None
+                    country_origin = str(row.get('country_origin', '')) if pd.notna(row.get('country_origin')) else None
                     steel_pct = float(row.get('steel_pct')) if pd.notna(row.get('steel_pct')) else None
                     aluminum_pct = float(row.get('aluminum_pct')) if pd.notna(row.get('aluminum_pct')) else None
+                    copper_pct = float(row.get('copper_pct')) if pd.notna(row.get('copper_pct')) else None
+                    wood_pct = float(row.get('wood_pct')) if pd.notna(row.get('wood_pct')) else None
+                    auto_pct = float(row.get('auto_pct')) if pd.notna(row.get('auto_pct')) else None
+                    non_steel_pct = float(row.get('non_steel_pct')) if pd.notna(row.get('non_steel_pct')) else None
+                    qty_unit = str(row.get('qty_unit', 'NO')) if pd.notna(row.get('qty_unit')) else 'NO'
+                    sec301 = str(row.get('sec301_exclusion_tariff', '')) if pd.notna(row.get('sec301_exclusion_tariff')) else None
                     mid = str(row.get('mid', '')) if pd.notna(row.get('mid')) else None
                     client_code = str(row.get('client_code', '')) if pd.notna(row.get('client_code')) else None
                     description = str(row.get('description', '')) if pd.notna(row.get('description')) else None
@@ -449,12 +479,33 @@ class PartsDatabase:
                         if hts_code and hts_code != 'nan':
                             updates.append("hts_code = ?")
                             params.append(hts_code)
+                        if country_origin and country_origin != 'nan':
+                            updates.append("country_origin = ?")
+                            params.append(country_origin)
                         if steel_pct is not None:
-                            updates.append("avg_steel_pct = ?")
+                            updates.append("steel_pct = ?")
                             params.append(steel_pct)
                         if aluminum_pct is not None:
-                            updates.append("avg_aluminum_pct = ?")
+                            updates.append("aluminum_pct = ?")
                             params.append(aluminum_pct)
+                        if copper_pct is not None:
+                            updates.append("copper_pct = ?")
+                            params.append(copper_pct)
+                        if wood_pct is not None:
+                            updates.append("wood_pct = ?")
+                            params.append(wood_pct)
+                        if auto_pct is not None:
+                            updates.append("auto_pct = ?")
+                            params.append(auto_pct)
+                        if non_steel_pct is not None:
+                            updates.append("non_steel_pct = ?")
+                            params.append(non_steel_pct)
+                        if qty_unit and qty_unit != 'nan':
+                            updates.append("qty_unit = ?")
+                            params.append(qty_unit)
+                        if sec301 and sec301 != 'nan':
+                            updates.append("sec301_exclusion_tariff = ?")
+                            params.append(sec301)
                         if mid and mid != 'nan':
                             updates.append("mid = ?")
                             params.append(mid)
@@ -465,6 +516,9 @@ class PartsDatabase:
                             updates.append("description = COALESCE(description, ?)")
                             params.append(description)
 
+                        updates.append("last_updated = ?")
+                        params.append(datetime.now().isoformat())
+
                         if updates:
                             params.append(part_number)
                             cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE part_number = ?", params)
@@ -473,18 +527,25 @@ class PartsDatabase:
                     elif not exists:
                         # Insert new part
                         cursor.execute("""
-                            INSERT INTO parts (part_number, description, hts_code, avg_steel_pct,
-                                             avg_aluminum_pct, mid, client_code, first_seen_date, last_seen_date)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO parts (part_number, description, hts_code, country_origin,
+                                             steel_pct, aluminum_pct, copper_pct, wood_pct, auto_pct, non_steel_pct,
+                                             qty_unit, sec301_exclusion_tariff, mid, client_code, last_updated)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             part_number,
                             description if description and description != 'nan' else None,
                             hts_code if hts_code and hts_code != 'nan' else None,
+                            country_origin if country_origin and country_origin != 'nan' else None,
                             steel_pct,
                             aluminum_pct,
+                            copper_pct,
+                            wood_pct,
+                            auto_pct,
+                            non_steel_pct,
+                            qty_unit,
+                            sec301 if sec301 and sec301 != 'nan' else None,
                             mid if mid and mid != 'nan' else None,
                             client_code if client_code and client_code != 'nan' else None,
-                            datetime.now().isoformat(),
                             datetime.now().isoformat()
                         ))
                         imported += 1
@@ -570,7 +631,7 @@ class PartsDatabase:
         result = cursor.fetchone()
         return dict(result) if result else None
 
-    def get_all_parts(self, order_by: str = "last_seen_date DESC") -> List[Dict]:
+    def get_all_parts(self, order_by: str = "last_updated DESC") -> List[Dict]:
         """Get all parts in the database."""
         cursor = self.conn.cursor()
         cursor.execute(f"SELECT * FROM parts ORDER BY {order_by}")
@@ -615,21 +676,24 @@ class PartsDatabase:
                 return False
             df = pd.DataFrame([dict(row) for row in rows])
         else:
-            # Select specific columns, excluding hts_description, total_quantity, total_value, invoice_count, avg_net_weight
-            # Rename avg_steel_pct to steel_pct and avg_aluminum_pct to aluminum_pct
-            # Order: part_number, description, hts_code, mid, client_code, steel_pct, aluminum_pct, notes, first_seen_date, last_seen_date
+            # Export parts master table with all current columns
             cursor.execute("""
                 SELECT
                     part_number,
                     description,
                     hts_code,
+                    country_origin,
                     mid,
                     client_code,
-                    avg_steel_pct as steel_pct,
-                    avg_aluminum_pct as aluminum_pct,
-                    notes,
-                    first_seen_date,
-                    last_seen_date
+                    steel_pct,
+                    aluminum_pct,
+                    copper_pct,
+                    wood_pct,
+                    auto_pct,
+                    non_steel_pct,
+                    qty_unit,
+                    sec301_exclusion_tariff,
+                    last_updated
                 FROM parts
                 ORDER BY part_number
             """)
@@ -657,7 +721,8 @@ class PartsDatabase:
         cursor.execute("SELECT COUNT(DISTINCT project_number) as count FROM part_occurrences")
         total_projects = cursor.fetchone()['count']
 
-        cursor.execute("SELECT SUM(total_value) as total FROM parts")
+        # Calculate total value from occurrences (parts table no longer tracks this)
+        cursor.execute("SELECT SUM(total_price) as total FROM part_occurrences")
         total_value = cursor.fetchone()['total'] or 0
 
         cursor.execute("SELECT COUNT(*) as count FROM parts WHERE hts_code IS NOT NULL")
@@ -693,13 +758,272 @@ class PartsDatabase:
         self.conn.commit()
 
     def update_part_hts(self, part_number: str, hts_code: str, hts_description: str = ""):
-        """Manually update HTS code for a part."""
+        """Manually update HTS code for a part (hts_description parameter kept for backward compatibility but not used)."""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE parts SET hts_code = ?, hts_description = ?
+            UPDATE parts SET hts_code = ?, last_updated = ?
             WHERE part_number = ?
-        """, (hts_code, hts_description, part_number))
+        """, (hts_code, datetime.now().isoformat(), part_number))
         self.conn.commit()
+
+    # ==================== Section 232 Tariff Management ====================
+
+    def is_section_232_tariff(self, hts_code: str, material_type: str = None) -> bool:
+        """
+        Check if an HTS code is subject to Section 232 tariffs.
+
+        Args:
+            hts_code: HTS code to check
+            material_type: Optional material type to check ('Steel', 'Aluminum', 'Copper', 'Wood')
+
+        Returns:
+            True if HTS code is in Section 232 tariff list
+        """
+        cursor = self.conn.cursor()
+
+        if material_type:
+            # Case-insensitive comparison
+            cursor.execute("""
+                SELECT COUNT(*) FROM section_232_tariffs
+                WHERE hts_code = ? AND LOWER(material) = LOWER(?)
+            """, (hts_code, material_type))
+        else:
+            cursor.execute("""
+                SELECT COUNT(*) FROM section_232_tariffs
+                WHERE hts_code = ?
+            """, (hts_code,))
+
+        count = cursor.fetchone()[0]
+        return count > 0
+
+    def get_section_232_material_type(self, hts_code: str) -> Optional[str]:
+        """
+        Get the Section 232 material type for an HTS code.
+
+        Args:
+            hts_code: HTS code to look up
+
+        Returns:
+            Material type ('Steel', 'Aluminum', 'Copper', 'Wood') or None if not found
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT material FROM section_232_tariffs
+            WHERE hts_code = ?
+            LIMIT 1
+        """, (hts_code,))
+
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    def get_section_232_details(self, hts_code: str) -> List[Dict]:
+        """
+        Get all Section 232 details for an HTS code (may have multiple materials).
+
+        Args:
+            hts_code: HTS code to look up
+
+        Returns:
+            List of tariff records for this HTS code
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM section_232_tariffs
+            WHERE hts_code = ?
+        """, (hts_code,))
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_section_232_tariffs(self, material_type: str = None) -> List[Dict]:
+        """
+        Get all Section 232 tariff codes.
+
+        Args:
+            material_type: Optional filter by material type ('Steel', 'Aluminum', 'Copper', 'Wood')
+
+        Returns:
+            List of tariff records
+        """
+        cursor = self.conn.cursor()
+
+        if material_type:
+            cursor.execute("""
+                SELECT * FROM section_232_tariffs
+                WHERE LOWER(material) = LOWER(?)
+                ORDER BY hts_code
+            """, (material_type,))
+        else:
+            cursor.execute("""
+                SELECT * FROM section_232_tariffs
+                ORDER BY material, hts_code
+            """)
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_section_232_statistics(self) -> Dict[str, int]:
+        """
+        Get statistics about Section 232 tariff codes.
+
+        Returns:
+            Dictionary with counts by material type
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT material, COUNT(*)
+            FROM section_232_tariffs
+            GROUP BY material
+        """)
+
+        stats = {}
+        for material, count in cursor.fetchall():
+            stats[material] = count
+
+        # Add total
+        stats['total'] = sum(stats.values())
+
+        return stats
+
+    def get_section_232_declaration_code(self, hts_code: str, material_type: str = None) -> Optional[str]:
+        """
+        Get the declaration code required for an HTS code.
+
+        Args:
+            hts_code: HTS code to look up
+            material_type: Optional material type filter
+
+        Returns:
+            Declaration code (e.g., '08 - MELT & POUR') or None
+        """
+        cursor = self.conn.cursor()
+
+        if material_type:
+            cursor.execute("""
+                SELECT declaration_required FROM section_232_tariffs
+                WHERE hts_code = ? AND LOWER(material) = LOWER(?)
+                LIMIT 1
+            """, (hts_code, material_type))
+        else:
+            cursor.execute("""
+                SELECT declaration_required FROM section_232_tariffs
+                WHERE hts_code = ?
+                LIMIT 1
+            """, (hts_code,))
+
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    # ==================== Section 232 Actions Management ====================
+
+    def get_section_232_action(self, tariff_no: str) -> Optional[Dict]:
+        """
+        Get Section 232 action details by tariff number.
+
+        Args:
+            tariff_no: Tariff number to look up (e.g., "99038187")
+
+        Returns:
+            Action record or None if not found
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM section_232_actions
+            WHERE tariff_no = ?
+        """, (tariff_no,))
+
+        result = cursor.fetchone()
+        return dict(result) if result else None
+
+    def get_section_232_actions_by_type(self, action_type: str) -> List[Dict]:
+        """
+        Get all Section 232 actions by type.
+
+        Args:
+            action_type: Action type to filter by (e.g., "232 STEEL", "232 ALUMINUM")
+
+        Returns:
+            List of action records
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM section_232_actions
+            WHERE action = ?
+            ORDER BY tariff_no
+        """, (action_type,))
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_section_232_actions(self) -> List[Dict]:
+        """
+        Get all Section 232 action records.
+
+        Returns:
+            List of all action records
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM section_232_actions
+            ORDER BY action, tariff_no
+        """)
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_section_232_action_types(self) -> List[str]:
+        """
+        Get list of all unique Section 232 action types.
+
+        Returns:
+            List of action type strings
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT action FROM section_232_actions
+            ORDER BY action
+        """)
+
+        return [row[0] for row in cursor.fetchall()]
+
+    def get_section_232_actions_statistics(self) -> Dict[str, int]:
+        """
+        Get statistics about Section 232 actions.
+
+        Returns:
+            Dictionary with counts by action type
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT action, COUNT(*)
+            FROM section_232_actions
+            GROUP BY action
+        """)
+
+        stats = {}
+        for action, count in cursor.fetchall():
+            stats[action] = count
+
+        # Add total
+        stats['total'] = sum(stats.values())
+
+        return stats
+
+    def get_section_232_declaration_required(self, action_type: str) -> Optional[str]:
+        """
+        Get the typical declaration code required for an action type.
+
+        Args:
+            action_type: Action type (e.g., "232 STEEL")
+
+        Returns:
+            Declaration code (e.g., "08 MELT & POUR REQ") or None
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT additional_declaration FROM section_232_actions
+            WHERE action = ? AND additional_declaration IS NOT NULL
+            LIMIT 1
+        """, (action_type,))
+
+        result = cursor.fetchone()
+        return result[0] if result else None
 
     # ==================== Manufacturer/MID Management ====================
 
@@ -752,6 +1076,91 @@ class PartsDatabase:
             ORDER BY company_name
         """, (f'%{search_term}%', f'%{search_term}%', f'%{search_term}%'))
         return [dict(row) for row in cursor.fetchall()]
+
+    def import_manufacturers_from_excel(self, excel_path: str) -> tuple[int, int]:
+        """
+        Import manufacturers from Excel file.
+        Expected columns: MANUFACTURER NAME, MID, CUSTOMER ID, RELATED
+        Returns: (imported_count, updated_count)
+        """
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError("pandas is required for Excel import")
+
+        df = pd.read_excel(excel_path)
+
+        # Validate required columns
+        required_cols = ['MANUFACTURER NAME', 'MID']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns: {missing_cols}")
+
+        imported = 0
+        updated = 0
+        cursor = self.conn.cursor()
+
+        for _, row in df.iterrows():
+            company_name = str(row['MANUFACTURER NAME']).strip()
+            mid = str(row['MID']).strip() if pd.notna(row['MID']) else ''
+            customer_id = str(row.get('CUSTOMER ID', '')).strip() if pd.notna(row.get('CUSTOMER ID')) else ''
+            related = str(row.get('RELATED', '')).strip() if pd.notna(row.get('RELATED')) else ''
+
+            if not company_name or company_name == 'nan':
+                continue
+
+            # Infer country from MID (first 2 letters) or manufacturer name
+            country = ''
+
+            # First try to get country from MID (first 2 letters)
+            if mid and len(mid) >= 2:
+                country = mid[:2].upper()
+
+            # If no MID or invalid, infer from manufacturer name
+            if not country or len(country) != 2:
+                company_lower = company_name.lower()
+                if 'czech' in company_lower or 'czech republic' in company_lower:
+                    country = 'CZ'
+                elif 'brazil' in company_lower or 'brasil' in company_lower:
+                    country = 'BR'
+                elif 'denmark' in company_lower or 'danish' in company_lower:
+                    country = 'DK'
+                elif 'usa' in company_lower or 'united states' in company_lower:
+                    country = 'US'
+                else:
+                    country = ''
+
+            # Build notes from CUSTOMER ID and RELATED
+            notes_parts = []
+            if customer_id and customer_id != 'nan':
+                notes_parts.append(f"Customer: {customer_id}")
+            if related and related != 'nan':
+                notes_parts.append(f"Related: {related}")
+            notes = '; '.join(notes_parts)
+
+            # Check if manufacturer already exists
+            cursor.execute("SELECT id FROM manufacturers WHERE company_name = ?", (company_name,))
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update existing
+                cursor.execute("""
+                    UPDATE manufacturers
+                    SET mid = ?, country = ?, notes = ?, modified_date = ?
+                    WHERE id = ?
+                """, (mid if mid and mid != 'nan' else None, country, notes, datetime.now().isoformat(), existing['id']))
+                updated += 1
+            else:
+                # Insert new
+                cursor.execute("""
+                    INSERT INTO manufacturers (company_name, country, mid, notes, created_date, modified_date)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (company_name, country, mid if mid and mid != 'nan' else None, notes,
+                      datetime.now().isoformat(), datetime.now().isoformat()))
+                imported += 1
+
+        self.conn.commit()
+        return (imported, updated)
 
     def get_manufacturer_by_name(self, company_name: str) -> Optional[Dict]:
         """
