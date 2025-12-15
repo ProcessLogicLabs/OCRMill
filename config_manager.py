@@ -5,11 +5,19 @@ Handles saving/loading settings and template configurations.
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, List
 
+# PyInstaller path handling
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    APP_PATH = Path(sys.executable).parent
+else:
+    # Running as Python script
+    APP_PATH = Path(__file__).parent
 
-CONFIG_FILE = Path("config.json")
+CONFIG_FILE = APP_PATH / "config.json"
 
 DEFAULT_CONFIG = {
     "input_folder": "input",
@@ -56,10 +64,11 @@ DEFAULT_CONFIG = {
 
 class ConfigManager:
     """Manages application configuration."""
-    
+
     def __init__(self, config_file: Path = CONFIG_FILE):
         self.config_file = config_file
         self.config = self._load_config()
+        self._ensure_directories()
     
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from file or create default."""
@@ -82,6 +91,19 @@ class ConfigManager:
             else:
                 result[key] = value
         return result
+
+    def _ensure_directories(self):
+        """Ensure all required directories exist."""
+        directories = [
+            self.input_folder,
+            self.output_folder,
+            self.output_folder / "Processed",
+            self.output_folder / "CBP_Export",
+            APP_PATH / "reports",
+            self.database_path.parent,  # Resources folder
+        ]
+        for directory in directories:
+            directory.mkdir(parents=True, exist_ok=True)
     
     def save(self):
         """Save current configuration to file."""
@@ -112,7 +134,10 @@ class ConfigManager:
     
     @property
     def input_folder(self) -> Path:
-        return Path(self.config.get("input_folder", "input"))
+        folder = self.config.get("input_folder", "input")
+        if not Path(folder).is_absolute():
+            return APP_PATH / folder
+        return Path(folder)
     
     @input_folder.setter
     def input_folder(self, value: str):
@@ -121,7 +146,10 @@ class ConfigManager:
     
     @property
     def output_folder(self) -> Path:
-        return Path(self.config.get("output_folder", "output"))
+        folder = self.config.get("output_folder", "output")
+        if not Path(folder).is_absolute():
+            return APP_PATH / folder
+        return Path(folder)
     
     @output_folder.setter
     def output_folder(self, value: str):
@@ -157,7 +185,10 @@ class ConfigManager:
 
     @property
     def database_path(self) -> Path:
-        return Path(self.config.get("database_path", "parts_database.db"))
+        db_path = self.config.get("database_path", "Resources/parts_database.db")
+        if not Path(db_path).is_absolute():
+            return APP_PATH / db_path
+        return Path(db_path)
 
     @database_path.setter
     def database_path(self, value: str):
@@ -188,7 +219,10 @@ class ConfigManager:
     @property
     def cbp_input_folder(self) -> str:
         """Get CBP export input folder path."""
-        return self.config.get("cbp_export", {}).get("input_folder", "output/Processed")
+        folder = self.config.get("cbp_export", {}).get("input_folder", "output/Processed")
+        if not Path(folder).is_absolute():
+            return str(APP_PATH / folder)
+        return folder
 
     @cbp_input_folder.setter
     def cbp_input_folder(self, value: str):
@@ -201,7 +235,10 @@ class ConfigManager:
     @property
     def cbp_output_folder(self) -> str:
         """Get CBP export output folder path."""
-        return self.config.get("cbp_export", {}).get("output_folder", "output/CBP_Export")
+        folder = self.config.get("cbp_export", {}).get("output_folder", "output/CBP_Export")
+        if not Path(folder).is_absolute():
+            return str(APP_PATH / folder)
+        return folder
 
     @cbp_output_folder.setter
     def cbp_output_folder(self, value: str):
