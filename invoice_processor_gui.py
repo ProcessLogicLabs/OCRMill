@@ -811,6 +811,9 @@ class OCRMillApp:
         self.root.title(f"OCRMill - Invoice Processing Suite v{__version__}")
         self.root.geometry("1200x750")
 
+        # Configure ttk styles for tabs with shading
+        self._configure_styles()
+
         # Shared resources
         self.config = ConfigManager()
         self.db = PartsDatabase(db_path=self.config.database_path)
@@ -846,6 +849,22 @@ class OCRMillApp:
         self._load_parts_data()
         self._update_parts_statistics()
         self._load_hts_list()
+
+    def _configure_styles(self):
+        """Configure ttk styles for tabs."""
+        style = ttk.Style()
+
+        # Configure notebook tab styling - make tabs more distinct
+        style.configure('TNotebook.Tab',
+                        padding=[14, 6],
+                        background='#d0d0d0',
+                        font=('Segoe UI', 9))
+
+        # Style for selected/active tab - white background stands out
+        style.map('TNotebook.Tab',
+                  background=[('selected', '#ffffff'), ('active', '#e8e8e8')],
+                  foreground=[('selected', '#000000'), ('active', '#333333')],
+                  expand=[('selected', [1, 1, 1, 0])])
 
     def _create_menu(self):
         """Create the unified menu bar."""
@@ -975,9 +994,16 @@ class OCRMillApp:
                        variable=self.consolidate_var,
                        command=self._save_consolidate).grid(row=3, column=1, sticky="w", padx=5, pady=2, columnspan=2)
 
+        # Auto CBP Export option
+        ttk.Label(settings_frame, text="Auto CBP Export:").grid(row=4, column=0, sticky="w", pady=2)
+        self.auto_cbp_var = tk.BooleanVar(value=self.config.auto_cbp_export)
+        ttk.Checkbutton(settings_frame, text="Auto-generate CBP export after processing",
+                       variable=self.auto_cbp_var,
+                       command=self._save_auto_cbp).grid(row=4, column=1, sticky="w", padx=5, pady=2, columnspan=2)
+
         # Control buttons
         btn_frame = ttk.Frame(settings_frame)
-        btn_frame.grid(row=4, column=0, columnspan=3, pady=10)
+        btn_frame.grid(row=5, column=0, columnspan=3, pady=10)
 
         self.start_btn = ttk.Button(btn_frame, text="Start", command=self.start_processing, width=12)
         self.start_btn.pack(side=tk.LEFT, padx=5)
@@ -2137,6 +2163,12 @@ To add a new template:
         mode = "one CSV per PDF" if self.consolidate_var.get() else "separate CSVs per invoice"
         self._queue_log(f"Multi-invoice mode: {mode}")
 
+    def _save_auto_cbp(self):
+        """Save auto CBP export setting."""
+        self.config.auto_cbp_export = self.auto_cbp_var.get()
+        status = "enabled" if self.auto_cbp_var.get() else "disabled"
+        self._queue_log(f"Auto CBP Export: {status}")
+
     def _toggle_template(self, name: str, var: tk.BooleanVar):
         """Toggle template enabled state."""
         self.config.set_template_enabled(name, var.get())
@@ -2221,8 +2253,56 @@ To add a new template:
 
             # Refresh parts data after processing
             self._refresh_parts_data()
+
+            # Auto-run CBP export if enabled and files were processed
+            if count > 0 and self.auto_cbp_var.get():
+                self._auto_cbp_export()
         finally:
             self.processing_lock.release()
+
+    def _auto_cbp_export(self):
+        """Automatically process CBP export for pending CSV files."""
+        if not HAS_INVOICE_PROCESSOR:
+            self._queue_log("Auto CBP Export: Invoice Processor module not available")
+            return
+
+        try:
+            input_folder = Path(self.config.cbp_input_folder)
+            output_folder = Path(self.config.cbp_output_folder)
+
+            # Ensure output folder exists
+            output_folder.mkdir(parents=True, exist_ok=True)
+
+            # Find CSV files that don't have corresponding CBP export
+            csv_files = list(input_folder.glob("*.csv"))
+            pending_files = []
+
+            for csv_file in csv_files:
+                # Check both naming conventions for output files
+                output_file1 = output_folder / f"{csv_file.stem}_CBP.xlsx"
+                output_file2 = output_folder / f"{csv_file.stem}.xlsx"
+                if not output_file1.exists() and not output_file2.exists():
+                    pending_files.append(csv_file)
+
+            if not pending_files:
+                self._queue_log("Auto CBP Export: No pending files to process")
+                return
+
+            self._queue_log(f"Auto CBP Export: Processing {len(pending_files)} file(s)...")
+
+            for csv_file in pending_files:
+                try:
+                    self._process_cbp_file(csv_file)
+                except Exception as e:
+                    self._queue_log(f"Auto CBP Export error for {csv_file.name}: {e}")
+
+            self._queue_log(f"Auto CBP Export: Complete")
+
+            # Refresh CBP list if on that tab
+            self.root.after(0, self._refresh_cbp_list)
+
+        except Exception as e:
+            self._queue_log(f"Auto CBP Export error: {e}")
 
     def _processing_loop(self):
         """Background processing loop."""
@@ -2242,6 +2322,10 @@ To add a new template:
                     # Refresh parts data if any files were processed
                     if count > 0:
                         self.root.after(0, self._refresh_parts_data)
+
+                        # Auto-run CBP export if enabled
+                        if self.auto_cbp_var.get():
+                            self.root.after(0, self._auto_cbp_export)
 
                 poll_interval = int(self.poll_var.get())
                 for _ in range(poll_interval):

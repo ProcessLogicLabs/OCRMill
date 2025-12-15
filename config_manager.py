@@ -26,6 +26,7 @@ DEFAULT_CONFIG = {
     "poll_interval": 60,
     "auto_start": False,
     "consolidate_multi_invoice": False,  # False = separate CSVs per invoice, True = one CSV per PDF
+    "auto_cbp_export": False,  # Auto-run CBP export after invoice processing
     "cbp_export": {
         "input_folder": "output/Processed",
         "output_folder": "output/CBP_Export"
@@ -172,6 +173,15 @@ class ConfigManager:
     @auto_start.setter
     def auto_start(self, value: bool):
         self.config["auto_start"] = value
+        self.save()
+
+    @property
+    def auto_cbp_export(self) -> bool:
+        return self.config.get("auto_cbp_export", False)
+
+    @auto_cbp_export.setter
+    def auto_cbp_export(self, value: bool):
+        self.config["auto_cbp_export"] = value
         self.save()
 
     @property
