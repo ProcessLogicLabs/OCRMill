@@ -49,6 +49,7 @@ from config_manager import ConfigManager
 from templates import get_all_templates, TEMPLATE_REGISTRY
 from templates.bill_of_lading import BillOfLadingTemplate
 from parts_database import PartsDatabase, create_parts_report
+from updater import UpdateChecker
 
 
 class LogHandler:
@@ -850,6 +851,10 @@ class OCRMillApp:
         self._update_parts_statistics()
         self._load_hts_list()
 
+        # Initialize update checker and check for updates on startup (after 3 seconds)
+        self.update_checker = UpdateChecker(__version__)
+        self.root.after(3000, self._check_for_updates_silent)
+
     def _configure_styles(self):
         """Configure ttk styles for tabs."""
         style = ttk.Style()
@@ -904,6 +909,8 @@ class OCRMillApp:
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="Check for Updates...", command=self._check_for_updates)
+        help_menu.add_separator()
         help_menu.add_command(label="About", command=self._show_about)
 
     def _create_main_ui(self):
@@ -2898,6 +2905,105 @@ Last Updated:       {part.get('last_updated', 'N/A')}
             "- HTS code tracking\n"
             "- Manufacturer/MID management"
         )
+
+    def _check_for_updates_silent(self):
+        """Check for updates silently on startup (no dialog if up-to-date)."""
+        def on_check_complete(update_available, error):
+            if update_available and self.update_checker.latest_version:
+                self.root.after(0, lambda: self._show_update_dialog(silent=True))
+
+        self.update_checker.check_for_updates_async(on_check_complete)
+
+    def _check_for_updates(self):
+        """Manually check for updates (shows dialog either way)."""
+        # Show checking dialog
+        self.status_var.set("Checking for updates...")
+
+        def on_check_complete(update_available, error):
+            self.root.after(0, lambda: self._on_update_check_complete(update_available, error))
+
+        self.update_checker.check_for_updates_async(on_check_complete)
+
+    def _on_update_check_complete(self, update_available, error):
+        """Handle update check completion."""
+        self.status_var.set("Ready")
+
+        if error:
+            messagebox.showerror("Update Check Failed", f"Could not check for updates:\n\n{error}")
+            return
+
+        if update_available:
+            self._show_update_dialog(silent=False)
+        else:
+            messagebox.showinfo(
+                "No Updates Available",
+                f"You are running the latest version.\n\n"
+                f"Current version: {__version__}"
+            )
+
+    def _show_update_dialog(self, silent=False):
+        """Show dialog about available update."""
+        info = self.update_checker.get_update_info()
+
+        # Create update dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Update Available")
+        dialog.geometry("500x350")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Header
+        header_frame = ttk.Frame(dialog, padding="10")
+        header_frame.pack(fill="x")
+
+        ttk.Label(
+            header_frame,
+            text="A new version of OCRMill is available!",
+            font=('Segoe UI', 12, 'bold')
+        ).pack(anchor="w")
+
+        # Version info
+        version_frame = ttk.Frame(dialog, padding="10")
+        version_frame.pack(fill="x")
+
+        ttk.Label(version_frame, text=f"Current version: {info['current_version']}").pack(anchor="w")
+        ttk.Label(
+            version_frame,
+            text=f"Latest version: {info['latest_version']}",
+            font=('Segoe UI', 10, 'bold'),
+            foreground='green'
+        ).pack(anchor="w")
+
+        # Release notes
+        notes_frame = ttk.LabelFrame(dialog, text="Release Notes", padding="5")
+        notes_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        notes_text = scrolledtext.ScrolledText(notes_frame, height=8, wrap=tk.WORD)
+        notes_text.pack(fill="both", expand=True)
+        notes_text.insert("1.0", info['release_notes'] or "No release notes available.")
+        notes_text.config(state='disabled')
+
+        # Buttons
+        btn_frame = ttk.Frame(dialog, padding="10")
+        btn_frame.pack(fill="x")
+
+        ttk.Button(
+            btn_frame,
+            text="Download Update",
+            command=lambda: [self.update_checker.open_download_page(), dialog.destroy()]
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            btn_frame,
+            text="View on GitHub",
+            command=lambda: self.update_checker.open_releases_page()
+        ).pack(side="left", padx=5)
+
+        ttk.Button(
+            btn_frame,
+            text="Remind Me Later" if silent else "Close",
+            command=dialog.destroy
+        ).pack(side="right", padx=5)
 
     def _change_database_location(self):
         """Show dialog to change the database file location."""
