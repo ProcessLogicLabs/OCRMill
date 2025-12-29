@@ -1,4 +1,4 @@
 [submodule "DerivativeMill"]
 	path = DerivativeMill
-	url = https://github.com/royalpayne/DerivativeMill.git
+	url = https://github.com/ProcessLogicLabs/TariffMill.git
 	branch = Portable_Invoice_Processor

@@ -128,7 +128,7 @@ OCRMill/
 ## Support
 
 For issues or questions:
-- GitHub: https://github.com/royalpayne/OCRInvoiceMill
+- GitHub: https://github.com/ProcessLogicLabs/OCRInvoiceMill
 - Report bugs in the Issues tab
 
 ## License

@@ -15,7 +15,7 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
 # GitHub repository information
-GITHUB_OWNER = "royalpayne"
+GITHUB_OWNER = "ProcessLogicLabs"
 GITHUB_REPO = "OCRInvoiceMill"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
