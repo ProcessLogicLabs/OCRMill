@@ -185,15 +185,59 @@ class UpdateCheckWorker(QThread):
             from updater import UpdateChecker
 
             checker = UpdateChecker(self.current_version)
-            has_update, info = checker.check_for_updates()
+            has_update = checker.check_for_updates()
 
             if has_update:
-                self.update_available.emit(info)
+                self.update_available.emit(checker.get_update_info())
             else:
-                self.no_update.emit()
+                if checker.last_error:
+                    self.error.emit(checker.last_error)
+                else:
+                    self.no_update.emit()
 
         except Exception as e:
             self.error.emit(str(e))
+
+
+class UpdateDownloadWorker(QThread):
+    """Worker for downloading updates."""
+
+    progress = pyqtSignal(int, int)  # downloaded, total
+    finished = pyqtSignal(bool, str)  # success, path_or_error
+    cancelled = pyqtSignal()
+
+    def __init__(self, checker):
+        super().__init__()
+        self.checker = checker
+        self._cancelled = False
+
+    def run(self):
+        """Download the update."""
+        try:
+            def progress_callback(downloaded, total):
+                self.progress.emit(downloaded, total)
+
+            def cancel_check():
+                return self._cancelled
+
+            path = self.checker.download_update(
+                progress_callback=progress_callback,
+                cancel_check=cancel_check
+            )
+
+            if self._cancelled:
+                self.cancelled.emit()
+            elif path:
+                self.finished.emit(True, str(path))
+            else:
+                self.finished.emit(False, self.checker.last_error or "Download failed")
+
+        except Exception as e:
+            self.finished.emit(False, str(e))
+
+    def cancel(self):
+        """Cancel the download."""
+        self._cancelled = True
 
 
 class ImportWorker(QThread):

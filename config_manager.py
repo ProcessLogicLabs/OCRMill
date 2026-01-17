@@ -27,6 +27,7 @@ DEFAULT_CONFIG = {
     "auto_start": False,
     "consolidate_multi_invoice": False,  # False = separate CSVs per invoice, True = one CSV per PDF
     "auto_cbp_export": False,  # Auto-run CBP export after invoice processing
+    "check_updates_on_startup": True,  # Check for updates when application starts
     "cbp_export": {
         "input_folder": "output/Processed",
         "output_folder": "output/CBP_Export"
@@ -191,6 +192,15 @@ class ConfigManager:
     @consolidate_multi_invoice.setter
     def consolidate_multi_invoice(self, value: bool):
         self.config["consolidate_multi_invoice"] = value
+        self.save()
+
+    @property
+    def check_updates_on_startup(self) -> bool:
+        return self.config.get("check_updates_on_startup", True)
+
+    @check_updates_on_startup.setter
+    def check_updates_on_startup(self, value: bool):
+        self.config["check_updates_on_startup"] = value
         self.save()
 
     @property

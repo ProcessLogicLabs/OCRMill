@@ -7,7 +7,8 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QMenuBar, QMenu, QStatusBar, QMessageBox, QFileDialog,
-    QApplication, QLabel, QFrame
+    QApplication, QLabel, QFrame, QDialog, QProgressBar,
+    QPushButton, QPlainTextEdit, QDialogButtonBox
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QIcon, QCloseEvent, QFont, QPixmap
@@ -24,7 +25,7 @@ from ui.tabs.parts_tab import PartsDatabaseTab
 from ui.dialogs.settings_dialog import SettingsDialog
 from ui.dialogs.manufacturers_dialog import ManufacturersDialog
 from ui.dialogs.hts_reference_dialog import HTSReferenceDialog
-from core.workers import ProcessingWorker, UpdateCheckWorker
+from core.workers import ProcessingWorker, UpdateCheckWorker, UpdateDownloadWorker
 
 
 # Application version
@@ -546,6 +547,7 @@ class OCRMillMainWindow(QMainWindow):
     def _check_for_updates(self):
         """Check for application updates (user-initiated)."""
         self.status_label.setText("Checking for updates...")
+        self._manual_update_check = True
 
         worker = UpdateCheckWorker(VERSION)
         worker.update_available.connect(self._on_update_available)
@@ -558,48 +560,201 @@ class OCRMillMainWindow(QMainWindow):
 
     def _check_for_updates_silent(self):
         """Check for updates silently on startup."""
+        # Only check if enabled in config
+        if not getattr(self.config, 'check_updates_on_startup', True):
+            return
+
+        self._manual_update_check = False
         worker = UpdateCheckWorker(VERSION)
         worker.update_available.connect(self._on_update_available)
+        # Don't connect no_update or error for silent check
         worker.start()
         self._update_worker = worker
 
     @pyqtSlot(dict)
     def _on_update_available(self, info: dict):
-        """Handle update available."""
+        """Handle update available - show TariffMill-style dialog."""
         self.status_label.setText("Update available!")
 
+        # Store update info for later use
+        self._update_info = info
+
+        # Create update available dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Update Available")
+        dialog.setMinimumSize(500, 400)
+
+        layout = QVBoxLayout(dialog)
+
+        # Version info
+        current_ver = info.get('current_version', VERSION)
+        latest_ver = info.get('latest_version', 'Unknown')
+        version_label = QLabel(
+            f"<h3>A new version of OCRMill is available!</h3>"
+            f"<p>Current version: <b>v{current_ver}</b></p>"
+            f"<p>Latest version: <b>v{latest_ver}</b></p>"
+        )
+        layout.addWidget(version_label)
+
+        # Release notes
+        notes_label = QLabel("Release Notes:")
+        layout.addWidget(notes_label)
+
+        notes_text = QPlainTextEdit()
+        notes_text.setPlainText(info.get('release_notes', 'No release notes available.'))
+        notes_text.setReadOnly(True)
+        layout.addWidget(notes_text)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+
+        # Download & Install button (Windows only, if direct download available)
+        if sys.platform == 'win32' and info.get('has_direct_download'):
+            download_btn = QPushButton("Download && Install")
+            download_btn.clicked.connect(lambda: self._start_update_download(dialog))
+            button_layout.addWidget(download_btn)
+
+        # View on GitHub button
+        github_btn = QPushButton("View on GitHub")
+        github_btn.clicked.connect(lambda: self._open_github_release(info))
+        button_layout.addWidget(github_btn)
+
+        button_layout.addStretch()
+
+        # Remind Me Later button
+        later_btn = QPushButton("Remind Me Later")
+        later_btn.clicked.connect(dialog.reject)
+        button_layout.addWidget(later_btn)
+
+        layout.addLayout(button_layout)
+
+        dialog.exec()
+        self.status_label.setText("Ready")
+
+    def _start_update_download(self, parent_dialog: QDialog):
+        """Start downloading the update with progress dialog."""
+        parent_dialog.accept()  # Close the update available dialog
+
+        # Create the UpdateChecker with current info
+        from updater import UpdateChecker
+        checker = UpdateChecker(VERSION)
+        checker.check_for_updates()  # Re-check to populate download info
+
+        if not checker.download_url or checker.download_url == checker.latest_release_url:
+            QMessageBox.warning(
+                self,
+                "Download Unavailable",
+                "Direct download is not available for this release.\n"
+                "Please download manually from GitHub."
+            )
+            checker.open_releases_page()
+            return
+
+        # Create download progress dialog
+        progress_dialog = QDialog(self)
+        progress_dialog.setWindowTitle("Downloading Update")
+        progress_dialog.setFixedSize(400, 120)
+        progress_dialog.setModal(True)
+
+        layout = QVBoxLayout(progress_dialog)
+
+        status_label = QLabel("Downloading update...")
+        layout.addWidget(status_label)
+
+        progress_bar = QProgressBar()
+        progress_bar.setRange(0, 100)
+        layout.addWidget(progress_bar)
+
+        cancel_btn = QPushButton("Cancel")
+        layout.addWidget(cancel_btn)
+
+        # Create download worker
+        download_worker = UpdateDownloadWorker(checker)
+
+        def on_progress(downloaded, total):
+            if total > 0:
+                pct = int(downloaded / total * 100)
+                progress_bar.setValue(pct)
+                mb_downloaded = downloaded / (1024 * 1024)
+                mb_total = total / (1024 * 1024)
+                status_label.setText(f"Downloaded {mb_downloaded:.1f} MB of {mb_total:.1f} MB")
+
+        def on_finished(success, result):
+            progress_dialog.accept()
+            if success:
+                self._prompt_install_update(Path(result), checker)
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Download Failed",
+                    f"Failed to download update:\n{result}"
+                )
+
+        def on_cancelled():
+            progress_dialog.reject()
+
+        download_worker.progress.connect(on_progress)
+        download_worker.finished.connect(on_finished)
+        download_worker.cancelled.connect(on_cancelled)
+        cancel_btn.clicked.connect(download_worker.cancel)
+
+        # Store reference and start
+        self._download_worker = download_worker
+        download_worker.start()
+
+        progress_dialog.exec()
+
+    def _prompt_install_update(self, installer_path: Path, checker):
+        """Prompt user to install the downloaded update."""
         reply = QMessageBox.question(
             self,
-            "Update Available",
-            f"A new version is available: {info.get('version', 'Unknown')}\n\n"
-            f"Release notes:\n{info.get('notes', 'No notes available')[:500]}\n\n"
-            "Would you like to download it?",
+            "Install Update",
+            "Update downloaded successfully!\n\n"
+            "Do you want to install the update now?\n"
+            "The application will close and the installer will start.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            import webbrowser
-            webbrowser.open(info.get('url', 'https://github.com/ProcessLogicLabs/OCRInvoiceMill/releases'))
+            if checker.install_update(installer_path):
+                # Give installer time to start, then quit
+                QTimer.singleShot(500, QApplication.quit)
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Installation Failed",
+                    f"Failed to start installer:\n{checker.last_error}"
+                )
+
+    def _open_github_release(self, info: dict):
+        """Open the GitHub release page."""
+        import webbrowser
+        url = info.get('release_url') or 'https://github.com/ProcessLogicLabs/OCRMill/releases'
+        webbrowser.open(url)
 
     @pyqtSlot()
     def _on_no_update(self):
         """Handle no update available."""
         self.status_label.setText("Ready")
-        QMessageBox.information(
-            self,
-            "No Updates",
-            f"You are running the latest version (v{VERSION})."
-        )
+        # Only show message for manual checks
+        if getattr(self, '_manual_update_check', False):
+            QMessageBox.information(
+                self,
+                "No Updates",
+                f"You are running the latest version (v{VERSION})."
+            )
 
     @pyqtSlot(str)
     def _on_update_error(self, error: str):
         """Handle update check error."""
         self.status_label.setText("Ready")
-        QMessageBox.warning(
-            self,
-            "Update Check Failed",
-            f"Could not check for updates:\n{error}"
-        )
+        # Only show message for manual checks
+        if getattr(self, '_manual_update_check', False):
+            QMessageBox.warning(
+                self,
+                "Update Check Failed",
+                f"Could not check for updates:\n{error}"
+            )
 
     @pyqtSlot()
     def _show_about(self):
@@ -609,8 +764,8 @@ class OCRMillMainWindow(QMainWindow):
             "About OCRMill",
             f"<h2>OCRMill v{VERSION}</h2>"
             "<p>Invoice Processing & Parts Database Management</p>"
-            "<p>&copy; 2024 Process Logic Labs, LLC</p>"
-            "<p><a href='https://github.com/ProcessLogicLabs/OCRInvoiceMill'>"
+            "<p>&copy; 2024-2025 Process Logic Labs, LLC</p>"
+            "<p><a href='https://github.com/ProcessLogicLabs/OCRMill'>"
             "GitHub Repository</a></p>"
         )
 
