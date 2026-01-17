@@ -594,11 +594,11 @@ class InvoiceProcessingTab(QWidget):
         layout.setSpacing(8)
 
         # Vertical splitter: top = results preview (large), bottom = activity log (small)
-        splitter = QSplitter(Qt.Orientation.Vertical)
+        self.right_splitter = QSplitter(Qt.Orientation.Vertical)
 
         # Top section: Results Preview table (large area)
         results_preview = self._create_results_preview()
-        splitter.addWidget(results_preview)
+        self.right_splitter.addWidget(results_preview)
 
         # Bottom section: Sub-tabs with Activity Log and AI Templates (small area)
         self.sub_tabs = QTabWidget()
@@ -611,14 +611,35 @@ class InvoiceProcessingTab(QWidget):
         templates_widget = self._create_templates_tab()
         self.sub_tabs.addTab(templates_widget, "AI Templates")
 
-        splitter.addWidget(self.sub_tabs)
+        self.right_splitter.addWidget(self.sub_tabs)
 
         # Set sizes: large results preview (3), small log area (1)
-        splitter.setSizes([450, 150])
+        self.right_splitter.setSizes([450, 150])
 
-        layout.addWidget(splitter)
+        layout.addWidget(self.right_splitter)
+
+        # Schedule a repaint after the widget is fully initialized (fixes Windows Qt6 rendering)
+        QTimer.singleShot(50, self._force_panel_repaint)
 
         return panel
+
+    def _force_panel_repaint(self):
+        """Force the right panel and splitter to repaint properly on Windows."""
+        if hasattr(self, 'right_splitter'):
+            # Re-apply splitter sizes to trigger layout recalculation
+            self.right_splitter.setSizes([450, 150])
+            self.right_splitter.updateGeometry()
+            self.right_splitter.repaint()
+        if hasattr(self, 'results_table'):
+            self.results_table.updateGeometry()
+            self.results_table.repaint()
+            if self.results_table.viewport():
+                self.results_table.viewport().repaint()
+        if hasattr(self, 'sub_tabs'):
+            self.sub_tabs.updateGeometry()
+            self.sub_tabs.repaint()
+        self.updateGeometry()
+        self.repaint()
 
     def _create_invoice_processing_subtab(self) -> QWidget:
         """Create the Activity Log sub-tab."""
@@ -701,19 +722,32 @@ class InvoiceProcessingTab(QWidget):
         self.results_table.setColumnCount(len(default_columns))
         self.results_table.setHorizontalHeaderLabels(default_columns)
 
-        # Set column widths
+        # Set column widths - set all to Interactive first, then set specific widths
         header = self.results_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        for i in range(2, len(default_columns)):
+        for i in range(len(default_columns)):
             header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
 
+        # Set initial column widths
         self.results_table.setColumnWidth(0, 120)  # Part Number
+        self.results_table.setColumnWidth(1, 200)  # Description
         self.results_table.setColumnWidth(2, 80)   # Quantity
         self.results_table.setColumnWidth(3, 90)   # Unit Price
         self.results_table.setColumnWidth(4, 90)   # Total
         self.results_table.setColumnWidth(5, 80)   # Invoice #
         self.results_table.setColumnWidth(6, 100)  # Project #
+
+        # Set Description to stretch after initial widths are set
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        # Force header repaint to fix rendering issues on Windows
+        QTimer.singleShot(0, self._force_header_repaint)
+
+    def _force_header_repaint(self):
+        """Force the table header to repaint properly."""
+        header = self.results_table.horizontalHeader()
+        header.updateGeometry()
+        header.repaint()
+        self.results_table.viewport().update()
 
     def _update_results_table(self, items: list):
         """Update the results table with extracted items (dynamic columns)."""
@@ -791,6 +825,9 @@ class InvoiceProcessingTab(QWidget):
 
         # Store column mapping for export
         self._result_columns = columns
+
+        # Force header repaint to fix rendering issues on Windows
+        QTimer.singleShot(0, self._force_header_repaint)
 
     def _clear_results(self):
         """Clear the results preview table."""
