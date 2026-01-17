@@ -1,13 +1,14 @@
 {
-  "input_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\input",
-  "output_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\output",
+  "input_folder": "input",
+  "output_folder": "output",
   "database_path": "Resources/parts_database.db",
   "poll_interval": 10,
   "auto_start": false,
   "consolidate_multi_invoice": true,
+  "auto_cbp_export": false,
   "cbp_export": {
-    "input_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\output",
-    "output_folder": "C:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\output\\CBP_Export"
+    "input_folder": "output/Processed",
+    "output_folder": "output/CBP_Export"
   },
   "templates": {
     "mmcite_czech": {
@@ -19,9 +20,9 @@
   },
   "window": {
     "width": 1200,
-    "height": 750,
-    "x": null,
-    "y": null
+    "height": 730,
+    "x": 168,
+    "y": 90
   },
   "parts_master_columns": {
     "part_number": true,
