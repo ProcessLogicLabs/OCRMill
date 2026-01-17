@@ -19,10 +19,10 @@
     }
   },
   "window": {
-    "width": 1200,
-    "height": 730,
-    "x": 168,
-    "y": 90
+    "width": 1920,
+    "height": 926,
+    "x": 8,
+    "y": 0
   },
   "parts_master_columns": {
     "part_number": true,

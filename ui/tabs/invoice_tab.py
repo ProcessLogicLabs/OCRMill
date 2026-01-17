@@ -1,5 +1,6 @@
 """
 Invoice Processing Tab for OCRMill.
+TariffMill-style layout with left sidebar controls and results preview.
 """
 
 import sys
@@ -11,7 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
     QPushButton, QLineEdit, QSpinBox, QCheckBox, QTabWidget,
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox,
-    QFrame, QGridLayout, QSplitter
+    QFrame, QGridLayout, QSplitter, QRadioButton, QButtonGroup,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer
 from PyQt6.QtGui import QColor
@@ -24,8 +26,82 @@ from config_manager import ConfigManager
 from parts_database import PartsDatabase
 from templates import get_all_templates, TEMPLATE_REGISTRY
 from templates.bill_of_lading import BillOfLadingTemplate
-from ui.widgets.drop_zone import PDFDropZone
 from ui.widgets.log_viewer import LogViewerWidget, CompactLogViewer
+
+
+class DropListWidget(QListWidget):
+    """QListWidget that accepts file drops."""
+
+    files_dropped = pyqtSignal(list)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
+        self.setStyleSheet("""
+            QListWidget {
+                border: 2px dashed #5f9ea0;
+                border-radius: 4px;
+                background-color: #f8ffff;
+            }
+            QListWidget:hover {
+                border-color: #4a8a8c;
+                background-color: #e8f8f8;
+            }
+        """)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            # Check if any URLs are PDF files
+            for url in event.mimeData().urls():
+                if url.toLocalFile().lower().endswith('.pdf'):
+                    event.acceptProposedAction()
+                    self.setStyleSheet("""
+                        QListWidget {
+                            border: 2px solid #5f9ea0;
+                            border-radius: 4px;
+                            background-color: #d4edda;
+                        }
+                    """)
+                    return
+        event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.setStyleSheet("""
+            QListWidget {
+                border: 2px dashed #5f9ea0;
+                border-radius: 4px;
+                background-color: #f8ffff;
+            }
+            QListWidget:hover {
+                border-color: #4a8a8c;
+                background-color: #e8f8f8;
+            }
+        """)
+        event.accept()
+
+    def dropEvent(self, event):
+        files = []
+        for url in event.mimeData().urls():
+            file_path = url.toLocalFile()
+            if file_path.lower().endswith('.pdf'):
+                files.append(file_path)
+
+        self.setStyleSheet("""
+            QListWidget {
+                border: 2px dashed #5f9ea0;
+                border-radius: 4px;
+                background-color: #f8ffff;
+            }
+            QListWidget:hover {
+                border-color: #4a8a8c;
+                background-color: #e8f8f8;
+            }
+        """)
+
+        if files:
+            self.files_dropped.emit(files)
+            event.acceptProposedAction()
 
 
 class ProcessorEngine:
@@ -342,7 +418,12 @@ class ProcessorEngine:
 
 class InvoiceProcessingTab(QWidget):
     """
-    Invoice Processing tab containing controls, drop zone, and activity log.
+    Invoice Processing tab with TariffMill-style layout.
+
+    Layout:
+    - Left sidebar: Controls (Input Files, Output Files, Actions)
+    - Right area: Drop zone and Activity Log sub-tabs
+    - Bottom: Dynamic Results Preview table
 
     Signals:
         log_message: Emitted when a new log message is added
@@ -358,159 +439,202 @@ class InvoiceProcessingTab(QWidget):
         self.db = db
         self.engine = ProcessorEngine(config, db, log_callback=self._log)
         self._is_processing = False
+        self._last_results = []  # Store last processed results for preview
 
         self._setup_ui()
         self._connect_signals()
         self._load_config()
 
     def _setup_ui(self):
-        """Set up the tab UI."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
+        """Set up the tab UI with TariffMill-style layout."""
+        main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(8, 8, 8, 8)
 
-        # Header with status
-        header = self._create_header()
-        layout.addWidget(header)
+        # Left sidebar: Controls
+        left_sidebar = self._create_left_sidebar()
+        main_layout.addWidget(left_sidebar)
 
-        # Main content splitter
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-
-        # Left side: Controls and drop zone
-        left_panel = self._create_left_panel()
-        splitter.addWidget(left_panel)
-
-        # Right side: Sub-tabs
+        # Right panel: Sub-tabs with drop zone, activity log, and results preview
         right_panel = self._create_right_panel()
-        splitter.addWidget(right_panel)
+        main_layout.addWidget(right_panel, 1)
 
-        splitter.setSizes([400, 600])
-        layout.addWidget(splitter, 1)
-
-    def _create_header(self) -> QFrame:
-        """Create the header frame with status indicator."""
-        frame = QFrame()
-        layout = QHBoxLayout(frame)
-        layout.setContentsMargins(5, 5, 5, 5)
-
-        # Status indicator
-        self.status_indicator = QLabel("●")
-        self.status_indicator.setStyleSheet("color: gray; font-size: 16px;")
-        layout.addWidget(self.status_indicator)
-
-        self.status_text = QLabel("Monitoring: Stopped")
-        layout.addWidget(self.status_text)
-
-        layout.addStretch()
-
-        # Quick action buttons
-        self.start_btn = QPushButton("Start Monitoring")
-        self.start_btn.clicked.connect(self._request_start)
-        layout.addWidget(self.start_btn)
-
-        self.stop_btn = QPushButton("Stop")
-        self.stop_btn.setEnabled(False)
-        self.stop_btn.clicked.connect(self._request_stop)
-        layout.addWidget(self.stop_btn)
-
-        self.process_now_btn = QPushButton("Process Now")
-        self.process_now_btn.clicked.connect(self.process_now)
-        layout.addWidget(self.process_now_btn)
-
-        return frame
-
-    def _create_left_panel(self) -> QWidget:
-        """Create the left panel with settings and drop zone."""
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
+    def _create_left_sidebar(self) -> QWidget:
+        """Create the left sidebar with Controls (TariffMill style)."""
+        sidebar = QWidget()
+        sidebar.setMaximumWidth(320)
+        layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(0, 0, 5, 0)
+        layout.setSpacing(8)
 
-        # Settings group
-        settings_group = QGroupBox("Settings")
-        settings_layout = QGridLayout(settings_group)
+        # Input Files (PDFs) group - also serves as drop zone
+        input_group = QGroupBox("Input Files (PDFs) - Drop files here")
+        input_group.setAcceptDrops(True)
+        input_layout = QVBoxLayout(input_group)
+        input_layout.setSpacing(4)
 
-        # Input folder
-        settings_layout.addWidget(QLabel("Input Folder:"), 0, 0)
-        self.input_folder_edit = QLineEdit()
-        self.input_folder_edit.setReadOnly(True)
-        settings_layout.addWidget(self.input_folder_edit, 0, 1)
-        input_browse_btn = QPushButton("...")
-        input_browse_btn.setMaximumWidth(30)
-        input_browse_btn.clicked.connect(self._browse_input_folder)
-        settings_layout.addWidget(input_browse_btn, 0, 2)
+        # Input files list with drop support
+        self.input_files_list = DropListWidget()
+        self.input_files_list.setAlternatingRowColors(True)
+        self.input_files_list.setMinimumHeight(100)
+        self.input_files_list.files_dropped.connect(self._on_files_dropped)
+        self.input_files_list.doubleClicked.connect(self._process_selected_file)
+        input_layout.addWidget(self.input_files_list)
 
-        # Output folder
-        settings_layout.addWidget(QLabel("Output Folder:"), 1, 0)
-        self.output_folder_edit = QLineEdit()
-        self.output_folder_edit.setReadOnly(True)
-        settings_layout.addWidget(self.output_folder_edit, 1, 1)
-        output_browse_btn = QPushButton("...")
-        output_browse_btn.setMaximumWidth(30)
-        output_browse_btn.clicked.connect(self._browse_output_folder)
-        settings_layout.addWidget(output_browse_btn, 1, 2)
+        # Refresh button
+        input_refresh_btn = QPushButton("Refresh")
+        input_refresh_btn.clicked.connect(self._refresh_input_files)
+        input_layout.addWidget(input_refresh_btn)
 
-        # Poll interval
-        settings_layout.addWidget(QLabel("Poll Interval (sec):"), 2, 0)
-        self.poll_spinbox = QSpinBox()
-        self.poll_spinbox.setRange(5, 300)
-        self.poll_spinbox.valueChanged.connect(self._save_poll_interval)
-        settings_layout.addWidget(self.poll_spinbox, 2, 1, 1, 2)
+        layout.addWidget(input_group)
 
-        # Checkboxes
-        self.consolidate_check = QCheckBox("Consolidate Multi-Invoice PDFs")
-        self.consolidate_check.stateChanged.connect(self._save_consolidate)
-        settings_layout.addWidget(self.consolidate_check, 3, 0, 1, 3)
+        # Output Files (CSVs) group
+        output_group = QGroupBox("Output Files (CSVs)")
+        output_layout = QVBoxLayout(output_group)
+        output_layout.setSpacing(4)
 
-        self.auto_cbp_check = QCheckBox("Auto-run CBP Export")
-        self.auto_cbp_check.stateChanged.connect(self._save_auto_cbp)
-        settings_layout.addWidget(self.auto_cbp_check, 4, 0, 1, 3)
+        # Output files list
+        self.output_files_list = QListWidget()
+        self.output_files_list.setAlternatingRowColors(True)
+        self.output_files_list.setMaximumHeight(120)
+        output_layout.addWidget(self.output_files_list)
 
-        layout.addWidget(settings_group)
+        # Refresh button
+        output_refresh_btn = QPushButton("Refresh")
+        output_refresh_btn.clicked.connect(self._refresh_output_files)
+        output_layout.addWidget(output_refresh_btn)
 
-        # Drop zone
-        self.drop_zone = PDFDropZone()
-        self.drop_zone.files_dropped.connect(self._on_files_dropped)
-        self.drop_zone.clicked.connect(self._browse_files)
-        self.drop_zone.setMinimumHeight(150)
-        layout.addWidget(self.drop_zone)
+        layout.addWidget(output_group)
+
+        # Actions group
+        actions_group = QGroupBox("Actions")
+        actions_layout = QVBoxLayout(actions_group)
+        actions_layout.setSpacing(6)
+
+        # Start/Stop Monitoring button
+        self.start_btn = QPushButton("Start Monitoring")
+        self.start_btn.setStyleSheet("font-weight: bold;")
+        self.start_btn.clicked.connect(self._request_start)
+        actions_layout.addWidget(self.start_btn)
+
+        # Auto-start checkbox
+        self.auto_start_check = QCheckBox("Auto-start on launch")
+        self.auto_start_check.setChecked(self.config.auto_start)
+        self.auto_start_check.stateChanged.connect(self._save_auto_start)
+        actions_layout.addWidget(self.auto_start_check)
+
+        # Separator line
+        line1 = QFrame()
+        line1.setFrameShape(QFrame.Shape.HLine)
+        line1.setStyleSheet("background-color: #ccc;")
+        actions_layout.addWidget(line1)
+
+        # Process PDF File button
+        self.process_file_btn = QPushButton("Process PDF File...")
+        self.process_file_btn.clicked.connect(self._browse_files)
+        actions_layout.addWidget(self.process_file_btn)
+
+        # Process Folder Now button
+        self.process_now_btn = QPushButton("Process Folder Now")
+        self.process_now_btn.clicked.connect(self.process_now)
+        actions_layout.addWidget(self.process_now_btn)
+
+        # Separator line
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.Shape.HLine)
+        line2.setStyleSheet("background-color: #ccc;")
+        actions_layout.addWidget(line2)
+
+        # Send to TariffMill button (placeholder for future integration)
+        self.send_tariffmill_btn = QPushButton("Send to TariffMill")
+        self.send_tariffmill_btn.setEnabled(False)  # Disabled for now
+        self.send_tariffmill_btn.setToolTip("Integration with TariffMill coming soon")
+        actions_layout.addWidget(self.send_tariffmill_btn)
+
+        # Separator line
+        line3 = QFrame()
+        line3.setFrameShape(QFrame.Shape.HLine)
+        line3.setStyleSheet("background-color: #ccc;")
+        actions_layout.addWidget(line3)
+
+        # Multi-invoice PDFs options
+        multi_label = QLabel("Multi-invoice PDFs:")
+        actions_layout.addWidget(multi_label)
+
+        self.multi_invoice_group = QButtonGroup(self)
+        self.split_radio = QRadioButton("Split")
+        self.combine_radio = QRadioButton("Combine")
+        self.multi_invoice_group.addButton(self.split_radio)
+        self.multi_invoice_group.addButton(self.combine_radio)
+
+        if self.config.consolidate_multi_invoice:
+            self.combine_radio.setChecked(True)
+        else:
+            self.split_radio.setChecked(True)
+
+        radio_layout = QHBoxLayout()
+        radio_layout.addWidget(self.split_radio)
+        radio_layout.addWidget(self.combine_radio)
+        radio_layout.addStretch()
+        actions_layout.addLayout(radio_layout)
+
+        self.split_radio.toggled.connect(self._save_multi_invoice_mode)
+
+        layout.addWidget(actions_group)
 
         layout.addStretch()
 
-        return panel
+        return sidebar
 
     def _create_right_panel(self) -> QWidget:
-        """Create the right panel with sub-tabs."""
+        """Create the right panel with results preview and activity log."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 0, 0, 0)
+        layout.setSpacing(8)
 
+        # Vertical splitter: top = results preview (large), bottom = activity log (small)
+        splitter = QSplitter(Qt.Orientation.Vertical)
+
+        # Top section: Results Preview table (large area)
+        results_preview = self._create_results_preview()
+        splitter.addWidget(results_preview)
+
+        # Bottom section: Sub-tabs with Activity Log and AI Templates (small area)
         self.sub_tabs = QTabWidget()
 
-        # Activity Log tab
-        self.log_viewer = LogViewerWidget()
-        self.sub_tabs.addTab(self.log_viewer, "Activity Log")
+        # Invoice Processing sub-tab (activity log)
+        invoice_processing_widget = self._create_invoice_processing_subtab()
+        self.sub_tabs.addTab(invoice_processing_widget, "Activity Log")
 
-        # Templates tab
+        # AI Templates sub-tab
         templates_widget = self._create_templates_tab()
-        self.sub_tabs.addTab(templates_widget, "Templates")
+        self.sub_tabs.addTab(templates_widget, "AI Templates")
 
-        # Processing Stats tab
-        stats_widget = self._create_stats_tab()
-        self.sub_tabs.addTab(stats_widget, "Processing Stats")
+        splitter.addWidget(self.sub_tabs)
 
-        # Input Files tab
-        input_files_widget = self._create_input_files_tab()
-        self.sub_tabs.addTab(input_files_widget, "Input Files")
+        # Set sizes: large results preview (3), small log area (1)
+        splitter.setSizes([450, 150])
 
-        # Output Files tab
-        output_files_widget = self._create_output_files_tab()
-        self.sub_tabs.addTab(output_files_widget, "Output Files")
-
-        layout.addWidget(self.sub_tabs)
+        layout.addWidget(splitter)
 
         return panel
 
+    def _create_invoice_processing_subtab(self) -> QWidget:
+        """Create the Activity Log sub-tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(4)
+        layout.setContentsMargins(4, 4, 4, 4)
+
+        # Activity Log viewer (no group box - tab name is already "Activity Log")
+        self.log_viewer = LogViewerWidget()
+        layout.addWidget(self.log_viewer)
+
+        return widget
+
     def _create_templates_tab(self) -> QWidget:
-        """Create the templates configuration tab."""
+        """Create the AI Templates configuration tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
@@ -528,86 +652,176 @@ class InvoiceProcessingTab(QWidget):
 
         return widget
 
-    def _create_stats_tab(self) -> QWidget:
-        """Create the processing statistics tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+    def _create_results_preview(self) -> QWidget:
+        """Create the dynamic Results Preview table at the bottom."""
+        group = QGroupBox("Results Preview")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(5, 5, 5, 5)
 
-        self.stats_labels = {}
+        # Results table - dynamic columns based on extracted data
+        self.results_table = QTableWidget()
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.results_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.results_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.results_table.horizontalHeader().setStretchLastSection(True)
 
-        stats = [
-            ("Files Processed Today:", "processed_today"),
-            ("Total Items Extracted:", "items_today"),
-            ("Errors Today:", "errors_today"),
-            ("Last Processing:", "last_processing"),
+        # Initialize with default columns
+        self._init_results_columns()
+
+        layout.addWidget(self.results_table)
+
+        # Status bar for results
+        status_layout = QHBoxLayout()
+        self.results_status = QLabel("No results yet")
+        self.results_status.setStyleSheet("color: #666;")
+        status_layout.addWidget(self.results_status)
+
+        status_layout.addStretch()
+
+        clear_btn = QPushButton("Clear")
+        clear_btn.clicked.connect(self._clear_results)
+        status_layout.addWidget(clear_btn)
+
+        export_btn = QPushButton("Export Results...")
+        export_btn.clicked.connect(self._export_results)
+        status_layout.addWidget(export_btn)
+
+        layout.addLayout(status_layout)
+
+        return group
+
+    def _init_results_columns(self):
+        """Initialize results table with default columns."""
+        # Default columns - will be updated dynamically based on extracted data
+        default_columns = [
+            "Part Number", "Description", "Quantity", "Unit Price", "Total",
+            "Invoice #", "Project #"
+        ]
+        self.results_table.setColumnCount(len(default_columns))
+        self.results_table.setHorizontalHeaderLabels(default_columns)
+
+        # Set column widths
+        header = self.results_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        for i in range(2, len(default_columns)):
+            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+
+        self.results_table.setColumnWidth(0, 120)  # Part Number
+        self.results_table.setColumnWidth(2, 80)   # Quantity
+        self.results_table.setColumnWidth(3, 90)   # Unit Price
+        self.results_table.setColumnWidth(4, 90)   # Total
+        self.results_table.setColumnWidth(5, 80)   # Invoice #
+        self.results_table.setColumnWidth(6, 100)  # Project #
+
+    def _update_results_table(self, items: list):
+        """Update the results table with extracted items (dynamic columns)."""
+        if not items:
+            return
+
+        self._last_results = items
+
+        # Determine all unique keys across all items
+        all_keys = set()
+        for item in items:
+            all_keys.update(item.keys())
+
+        # Define preferred column order (common fields first)
+        preferred_order = [
+            'part_number', 'description', 'quantity', 'unit_price', 'total_price',
+            'invoice_number', 'project_number', 'hts_code', 'country_origin', 'mid',
+            'manufacturer_name', 'net_weight', 'gross_weight'
         ]
 
-        for label_text, key in stats:
-            row = QHBoxLayout()
-            row.addWidget(QLabel(label_text))
-            value_label = QLabel("--")
-            self.stats_labels[key] = value_label
-            row.addWidget(value_label)
-            row.addStretch()
-            layout.addLayout(row)
+        # Build column list: preferred first, then remaining alphabetically
+        columns = []
+        for key in preferred_order:
+            if key in all_keys:
+                columns.append(key)
+                all_keys.discard(key)
+        columns.extend(sorted(all_keys))
 
-        layout.addStretch()
+        # Set up table columns
+        display_names = {
+            'part_number': 'Part Number',
+            'description': 'Description',
+            'quantity': 'Quantity',
+            'unit_price': 'Unit Price',
+            'total_price': 'Total',
+            'invoice_number': 'Invoice #',
+            'project_number': 'Project #',
+            'hts_code': 'HTS Code',
+            'country_origin': 'Country',
+            'mid': 'MID',
+            'manufacturer_name': 'Manufacturer',
+            'net_weight': 'Net Weight',
+            'gross_weight': 'Gross Weight',
+            'bol_gross_weight': 'BOL Weight'
+        }
 
-        refresh_btn = QPushButton("Refresh Stats")
-        refresh_btn.clicked.connect(self._refresh_stats)
-        layout.addWidget(refresh_btn)
+        self.results_table.setColumnCount(len(columns))
+        headers = [display_names.get(col, col.replace('_', ' ').title()) for col in columns]
+        self.results_table.setHorizontalHeaderLabels(headers)
 
-        return widget
+        # Populate rows
+        self.results_table.setRowCount(len(items))
+        for row_idx, item in enumerate(items):
+            for col_idx, key in enumerate(columns):
+                value = item.get(key, '')
+                if value is None:
+                    value = ''
+                elif isinstance(value, float):
+                    if 'price' in key.lower() or 'total' in key.lower():
+                        value = f"${value:,.2f}"
+                    else:
+                        value = f"{value:,.2f}"
+                else:
+                    value = str(value)
 
-    def _create_input_files_tab(self) -> QWidget:
-        """Create the input files list tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+                cell = QTableWidgetItem(value)
+                self.results_table.setItem(row_idx, col_idx, cell)
 
-        toolbar = QHBoxLayout()
-        refresh_btn = QPushButton("Refresh")
-        refresh_btn.clicked.connect(self._refresh_input_files)
-        toolbar.addWidget(refresh_btn)
+        # Update status
+        total_value = sum(float(item.get('total_price', 0) or 0) for item in items)
+        self.results_status.setText(f"{len(items)} items extracted | Total: ${total_value:,.2f}")
 
-        process_selected_btn = QPushButton("Process Selected")
-        process_selected_btn.clicked.connect(self._process_selected_file)
-        toolbar.addWidget(process_selected_btn)
+        # Resize columns to content
+        self.results_table.resizeColumnsToContents()
 
-        delete_btn = QPushButton("Delete Selected")
-        delete_btn.clicked.connect(self._delete_selected_input)
-        toolbar.addWidget(delete_btn)
+        # Store column mapping for export
+        self._result_columns = columns
 
-        toolbar.addStretch()
-        layout.addLayout(toolbar)
+    def _clear_results(self):
+        """Clear the results preview table."""
+        self.results_table.setRowCount(0)
+        self._last_results = []
+        self.results_status.setText("No results yet")
 
-        self.input_files_list = QListWidget()
-        self.input_files_list.setAlternatingRowColors(True)
-        layout.addWidget(self.input_files_list)
+    def _export_results(self):
+        """Export current results to CSV."""
+        if not self._last_results:
+            QMessageBox.information(self, "No Results", "No results to export.")
+            return
 
-        return widget
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Results", "results.csv", "CSV Files (*.csv)"
+        )
+        if file_path:
+            try:
+                with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                    if hasattr(self, '_result_columns'):
+                        writer = csv.DictWriter(f, fieldnames=self._result_columns, extrasaction='ignore')
+                        writer.writeheader()
+                        writer.writerows(self._last_results)
+                    else:
+                        writer = csv.DictWriter(f, fieldnames=self._last_results[0].keys())
+                        writer.writeheader()
+                        writer.writerows(self._last_results)
 
-    def _create_output_files_tab(self) -> QWidget:
-        """Create the output files list tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        toolbar = QHBoxLayout()
-        refresh_btn = QPushButton("Refresh")
-        refresh_btn.clicked.connect(self._refresh_output_files)
-        toolbar.addWidget(refresh_btn)
-
-        open_folder_btn = QPushButton("Open Folder")
-        open_folder_btn.clicked.connect(self._open_output_folder)
-        toolbar.addWidget(open_folder_btn)
-
-        toolbar.addStretch()
-        layout.addLayout(toolbar)
-
-        self.output_files_list = QListWidget()
-        self.output_files_list.setAlternatingRowColors(True)
-        layout.addWidget(self.output_files_list)
-
-        return widget
+                QMessageBox.information(self, "Export Complete", f"Results exported to:\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", f"Failed to export:\n{e}")
 
     def _connect_signals(self):
         """Connect internal signals."""
@@ -615,11 +829,14 @@ class InvoiceProcessingTab(QWidget):
 
     def _load_config(self):
         """Load configuration values into UI."""
-        self.input_folder_edit.setText(str(self.config.input_folder))
-        self.output_folder_edit.setText(str(self.config.output_folder))
-        self.poll_spinbox.setValue(self.config.poll_interval)
-        self.consolidate_check.setChecked(self.config.consolidate_multi_invoice)
-        self.auto_cbp_check.setChecked(self.config.auto_cbp_export)
+        # Update multi-invoice mode radio buttons
+        if self.config.consolidate_multi_invoice:
+            self.combine_radio.setChecked(True)
+        else:
+            self.split_radio.setChecked(True)
+
+        # Update auto-start checkbox
+        self.auto_start_check.setChecked(self.config.auto_start)
 
         # Refresh file lists
         self._refresh_input_files()
@@ -632,37 +849,14 @@ class InvoiceProcessingTab(QWidget):
 
     # ----- Settings handlers -----
 
-    def _browse_input_folder(self):
-        """Browse for input folder."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Input Folder", str(self.config.input_folder)
-        )
-        if folder:
-            self.config.input_folder = folder
-            self.input_folder_edit.setText(folder)
-            self._refresh_input_files()
+    def _save_auto_start(self, state: int):
+        """Save auto-start setting."""
+        self.config.auto_start = (state == Qt.CheckState.Checked.value)
 
-    def _browse_output_folder(self):
-        """Browse for output folder."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Output Folder", str(self.config.output_folder)
-        )
-        if folder:
-            self.config.output_folder = folder
-            self.output_folder_edit.setText(folder)
-            self._refresh_output_files()
-
-    def _save_poll_interval(self, value: int):
-        """Save poll interval setting."""
-        self.config.poll_interval = value
-
-    def _save_consolidate(self, state: int):
-        """Save consolidate setting."""
-        self.config.consolidate_multi_invoice = (state == Qt.CheckState.Checked.value)
-
-    def _save_auto_cbp(self, state: int):
-        """Save auto CBP export setting."""
-        self.config.auto_cbp_export = (state == Qt.CheckState.Checked.value)
+    def _save_multi_invoice_mode(self, checked: bool):
+        """Save multi-invoice PDF mode (split vs combine)."""
+        # Split = NOT consolidate, Combine = consolidate
+        self.config.consolidate_multi_invoice = self.combine_radio.isChecked()
 
     def _save_template_enabled(self, name: str, state: int):
         """Save template enabled state."""
@@ -686,29 +880,57 @@ class InvoiceProcessingTab(QWidget):
     def set_processing_state(self, is_running: bool):
         """Update UI based on processing state."""
         self._is_processing = is_running
-        self.start_btn.setEnabled(not is_running)
-        self.stop_btn.setEnabled(is_running)
 
         if is_running:
-            self.status_indicator.setStyleSheet("color: green; font-size: 16px;")
-            self.status_text.setText("Monitoring: Running")
+            self.start_btn.setText("Stop Monitoring")
+            self.start_btn.setStyleSheet("font-weight: bold; background-color: #f8d7da; color: #721c24;")
+            self.start_btn.clicked.disconnect()
+            self.start_btn.clicked.connect(self._request_stop)
         else:
-            self.status_indicator.setStyleSheet("color: gray; font-size: 16px;")
-            self.status_text.setText("Monitoring: Stopped")
+            self.start_btn.setText("Start Monitoring")
+            self.start_btn.setStyleSheet("font-weight: bold;")
+            self.start_btn.clicked.disconnect()
+            self.start_btn.clicked.connect(self._request_start)
 
     @pyqtSlot()
     def process_now(self):
-        """Process files immediately."""
+        """Process files immediately and show results in preview table."""
         input_folder = Path(self.config.input_folder)
         output_folder = Path(self.config.output_folder)
 
         self._log("Processing files now...")
-        count = self.engine.process_folder(input_folder, output_folder)
+
+        # Collect all items for results preview
+        all_items = []
+        pdf_files = list(input_folder.glob("*.pdf"))
+
+        if not pdf_files:
+            self._log("No files to process")
+            self._refresh_input_files()
+            self._refresh_output_files()
+            return
+
+        for pdf_path in pdf_files:
+            try:
+                items = self.engine.process_pdf(pdf_path)
+                if items:
+                    all_items.extend(items)
+                    self.engine.save_to_csv(items, output_folder, pdf_name=pdf_path.name)
+                    self.engine.move_to_processed(pdf_path)
+                else:
+                    self.engine.move_to_failed(pdf_path, reason="No items extracted")
+            except Exception as e:
+                self._log(f"Error processing {pdf_path.name}: {e}")
+                self.engine.move_to_failed(pdf_path, reason=str(e)[:50])
+
+        count = len([p for p in pdf_files if not p.exists()])  # Files that were moved
         if count > 0:
             self.files_processed.emit(count)
             self._log(f"Processed {count} file(s)")
-        else:
-            self._log("No files to process")
+
+            # Update results preview table
+            if all_items:
+                self._update_results_table(all_items)
 
         self._refresh_input_files()
         self._refresh_output_files()
@@ -756,12 +978,46 @@ class InvoiceProcessingTab(QWidget):
             )
 
     def _browse_files(self):
-        """Browse for PDF files to add."""
+        """Browse for PDF files to process directly."""
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select PDF Files", "", "PDF Files (*.pdf)"
         )
         if files:
-            self._on_files_dropped(files)
+            self._process_pdf_files(files)
+
+    def _process_pdf_files(self, file_paths: list):
+        """Process PDF files directly and show results in preview table."""
+        output_folder = Path(self.config.output_folder)
+        output_folder.mkdir(exist_ok=True, parents=True)
+
+        all_items = []
+        processed_count = 0
+
+        for file_path in file_paths:
+            pdf_path = Path(file_path)
+            self._log(f"Processing: {pdf_path.name}")
+
+            try:
+                items = self.engine.process_pdf(pdf_path)
+                if items:
+                    all_items.extend(items)
+                    self.engine.save_to_csv(items, output_folder, pdf_name=pdf_path.name)
+                    processed_count += 1
+                    self._log(f"  Extracted {len(items)} items")
+                else:
+                    self._log(f"  No items extracted from {pdf_path.name}")
+            except Exception as e:
+                self._log(f"  Error: {e}")
+
+        if processed_count > 0:
+            self.files_processed.emit(processed_count)
+            self._log(f"Processed {processed_count} file(s), {len(all_items)} total items")
+
+            # Update results preview table
+            if all_items:
+                self._update_results_table(all_items)
+
+        self._refresh_output_files()
 
     def _refresh_input_files(self):
         """Refresh the input files list."""
@@ -782,7 +1038,7 @@ class InvoiceProcessingTab(QWidget):
                 self.output_files_list.addItem(item)
 
     def _process_selected_file(self):
-        """Process the selected input file."""
+        """Process the selected input file and show results in preview table."""
         current = self.input_files_list.currentItem()
         if not current:
             return
@@ -799,6 +1055,8 @@ class InvoiceProcessingTab(QWidget):
                     self.engine.save_to_csv(items, output_folder, pdf_name=pdf_path.name)
                     self.engine.move_to_processed(pdf_path)
                     self.files_processed.emit(1)
+                    # Update results preview table
+                    self._update_results_table(items)
                 else:
                     self.engine.move_to_failed(pdf_path, reason="No items extracted")
             except Exception as e:
@@ -807,47 +1065,6 @@ class InvoiceProcessingTab(QWidget):
 
             self._refresh_input_files()
             self._refresh_output_files()
-
-    def _delete_selected_input(self):
-        """Delete the selected input file."""
-        current = self.input_files_list.currentItem()
-        if not current:
-            return
-
-        reply = QMessageBox.question(
-            self, "Confirm Delete",
-            f"Delete {current.text()}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            input_folder = Path(self.config.input_folder)
-            pdf_path = input_folder / current.text()
-            if pdf_path.exists():
-                pdf_path.unlink()
-                self._refresh_input_files()
-
-    def _open_output_folder(self):
-        """Open the output folder in file explorer."""
-        import subprocess
-        import platform
-
-        folder = Path(self.config.output_folder)
-        if folder.exists():
-            if platform.system() == 'Windows':
-                subprocess.run(['explorer', str(folder)])
-            elif platform.system() == 'Darwin':
-                subprocess.run(['open', str(folder)])
-            else:
-                subprocess.run(['xdg-open', str(folder)])
-
-    def _refresh_stats(self):
-        """Refresh processing statistics."""
-        # TODO: Implement actual stats tracking
-        self.stats_labels['processed_today'].setText("--")
-        self.stats_labels['items_today'].setText("--")
-        self.stats_labels['errors_today'].setText("--")
-        self.stats_labels['last_processing'].setText("--")
 
     # ----- Logging -----
 

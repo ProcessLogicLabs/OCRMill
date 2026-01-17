@@ -5,12 +5,12 @@ Main window for OCRMill application.
 import sys
 from pathlib import Path
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QTabWidget,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QMenuBar, QMenu, QStatusBar, QMessageBox, QFileDialog,
-    QApplication, QLabel
+    QApplication, QLabel, QFrame
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QAction, QIcon, QCloseEvent
+from PyQt6.QtGui import QAction, QIcon, QCloseEvent, QFont, QPixmap
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -28,7 +28,7 @@ from core.workers import ProcessingWorker, UpdateCheckWorker
 
 
 # Application version
-VERSION = "2.5.0"
+VERSION = "0.97.01"
 
 
 class OCRMillMainWindow(QMainWindow):
@@ -84,79 +84,43 @@ class OCRMillMainWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(icon_path)))
 
     def _create_menu_bar(self):
-        """Create the menu bar with all menus."""
+        """Create the menu bar with all menus (TariffMill style)."""
         menubar = self.menuBar()
 
-        # File menu
-        file_menu = menubar.addMenu("&File")
-
-        import_action = QAction("&Import Parts List...", self)
-        import_action.triggered.connect(self._import_parts_list)
-        file_menu.addAction(import_action)
-
-        file_menu.addSeparator()
-
-        export_master = QAction("Export &Master CSV...", self)
-        export_master.triggered.connect(self._export_master)
-        file_menu.addAction(export_master)
-
-        export_history = QAction("Export &History CSV...", self)
-        export_history.triggered.connect(self._export_history)
-        file_menu.addAction(export_history)
-
-        file_menu.addSeparator()
-
-        reports_action = QAction("&Generate Reports...", self)
-        reports_action.triggered.connect(self._generate_reports)
-        file_menu.addAction(reports_action)
-
-        file_menu.addSeparator()
-
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-
-        # Lists menu
-        lists_menu = menubar.addMenu("&Lists")
-
-        manufacturers_action = QAction("&Manufacturers/MID...", self)
-        manufacturers_action.triggered.connect(self._show_manufacturers_dialog)
-        lists_menu.addAction(manufacturers_action)
-
-        hts_action = QAction("&HTS Reference...", self)
-        hts_action.triggered.connect(self._show_hts_reference_dialog)
-        lists_menu.addAction(hts_action)
-
-        # Processing menu
-        processing_menu = menubar.addMenu("&Processing")
+        # Session menu
+        session_menu = menubar.addMenu("&Session")
 
         self.start_action = QAction("&Start Monitoring", self)
         self.start_action.setShortcut("F5")
         self.start_action.triggered.connect(self._start_processing)
-        processing_menu.addAction(self.start_action)
+        session_menu.addAction(self.start_action)
 
         self.stop_action = QAction("S&top Monitoring", self)
         self.stop_action.setShortcut("F6")
         self.stop_action.setEnabled(False)
         self.stop_action.triggered.connect(self._stop_processing)
-        processing_menu.addAction(self.stop_action)
+        session_menu.addAction(self.stop_action)
 
-        processing_menu.addSeparator()
+        session_menu.addSeparator()
 
         process_now = QAction("Process &Now", self)
         process_now.setShortcut("F9")
         process_now.triggered.connect(self._process_now)
-        processing_menu.addAction(process_now)
-
-        processing_menu.addSeparator()
+        session_menu.addAction(process_now)
 
         cbp_export_action = QAction("Run &CBP Export", self)
         cbp_export_action.triggered.connect(self._run_cbp_export)
-        processing_menu.addAction(cbp_export_action)
+        session_menu.addAction(cbp_export_action)
+
+        session_menu.addSeparator()
+
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        session_menu.addAction(exit_action)
 
         # Settings menu
-        settings_menu = menubar.addMenu("&Settings")
+        settings_menu = menubar.addMenu("S&ettings")
 
         preferences_action = QAction("&Preferences...", self)
         preferences_action.triggered.connect(self._show_settings_dialog)
@@ -167,6 +131,40 @@ class OCRMillMainWindow(QMainWindow):
         db_location_action = QAction("Change &Database Location...", self)
         db_location_action.triggered.connect(self._change_database_location)
         settings_menu.addAction(db_location_action)
+
+        # Master Data menu
+        master_data_menu = menubar.addMenu("&Master Data")
+
+        import_action = QAction("&Import Parts List...", self)
+        import_action.triggered.connect(self._import_parts_list)
+        master_data_menu.addAction(import_action)
+
+        master_data_menu.addSeparator()
+
+        export_master = QAction("Export &Master CSV...", self)
+        export_master.triggered.connect(self._export_master)
+        master_data_menu.addAction(export_master)
+
+        export_history = QAction("Export &History CSV...", self)
+        export_history.triggered.connect(self._export_history)
+        master_data_menu.addAction(export_history)
+
+        master_data_menu.addSeparator()
+
+        reports_action = QAction("&Generate Reports...", self)
+        reports_action.triggered.connect(self._generate_reports)
+        master_data_menu.addAction(reports_action)
+
+        # References menu
+        references_menu = menubar.addMenu("&References")
+
+        manufacturers_action = QAction("&Manufacturers/MID...", self)
+        manufacturers_action.triggered.connect(self._show_manufacturers_dialog)
+        references_menu.addAction(manufacturers_action)
+
+        hts_action = QAction("&HTS Reference...", self)
+        hts_action.triggered.connect(self._show_hts_reference_dialog)
+        references_menu.addAction(hts_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -187,19 +185,59 @@ class OCRMillMainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
         layout = QVBoxLayout(central_widget)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(10, 10, 10, 5)
+        layout.setSpacing(10)
+
+        # Branding header (TariffMill style)
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(10, 8, 10, 12)
+
+        # Logo icon (if available)
+        logo_path = Path(__file__).parent.parent / "Resources" / "logo.png"
+        if logo_path.exists():
+            logo_label = QLabel()
+            pixmap = QPixmap(str(logo_path))
+            logo_label.setPixmap(pixmap.scaledToHeight(56, Qt.TransformationMode.SmoothTransformation))
+            header_layout.addWidget(logo_label)
+
+        # App title - styled like TariffMill with dual-color text
+        title_widget = QWidget()
+        title_layout = QHBoxLayout(title_widget)
+        title_layout.setContentsMargins(8, 0, 0, 0)
+        title_layout.setSpacing(0)
+
+        # "OCR" in purple/accent color
+        ocr_label = QLabel("OCR")
+        ocr_label.setStyleSheet("font-size: 34px; font-weight: bold; color: #6b5b95; font-family: 'Segoe UI', sans-serif;")
+        title_layout.addWidget(ocr_label)
+
+        # "Mill" in cyan/primary color
+        mill_label = QLabel("Mill")
+        mill_label.setStyleSheet("font-size: 34px; font-weight: bold; color: #5f9ea0; font-family: 'Segoe UI', sans-serif;")
+        title_layout.addWidget(mill_label)
+
+        title_layout.addStretch()
+        header_layout.addWidget(title_widget)
+        header_layout.addStretch()
+
+        # Version label (right side)
+        version_label = QLabel(f"v{VERSION}")
+        version_label.setStyleSheet("color: #999999; font-size: 12pt;")
+        header_layout.addWidget(version_label)
+
+        layout.addLayout(header_layout)
 
         # Main tab widget
         self.main_tabs = QTabWidget()
         layout.addWidget(self.main_tabs)
 
-        # Invoice Processing tab
+        # Invoice Processing tab (main processing interface)
         self.invoice_tab = InvoiceProcessingTab(self.config, self.db, self)
         self.main_tabs.addTab(self.invoice_tab, "Invoice Processing")
 
-        # Parts Database tab
+        # Parts View tab (database view and management)
         self.parts_tab = PartsDatabaseTab(self.config, self.db, self)
-        self.main_tabs.addTab(self.parts_tab, "Parts Database")
+        self.main_tabs.addTab(self.parts_tab, "Parts View")
 
     def _create_status_bar(self):
         """Create the status bar."""

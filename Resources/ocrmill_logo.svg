@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for the center mill circle -->
+    <linearGradient id="millGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7ab8ba;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5f9ea0;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Gradient for accent elements (purple) -->
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b7bb5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6b5b95;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer ring of characters morphing to binary - arranged in a circle -->
+  <g font-family="'Segoe UI', Arial, sans-serif" font-weight="bold">
+    <!-- Top -->
+    <text x="64" y="16" font-size="12" fill="#6b5b95" text-anchor="middle">A</text>
+    <text x="64" y="26" font-size="8" fill="#5f9ea0" text-anchor="middle" opacity="0.8">01</text>
+
+    <!-- Top-right -->
+    <text x="96" y="32" font-size="11" fill="#5f9ea0" text-anchor="middle">0</text>
+    <text x="104" y="42" font-size="9" fill="#6b5b95" text-anchor="middle" opacity="0.8">B</text>
+
+    <!-- Right -->
+    <text x="112" y="62" font-size="12" fill="#6b5b95" text-anchor="middle">1</text>
+    <text x="112" y="72" font-size="8" fill="#5f9ea0" text-anchor="middle" opacity="0.8">C</text>
+
+    <!-- Bottom-right -->
+    <text x="102" y="96" font-size="11" fill="#5f9ea0" text-anchor="middle">0</text>
+    <text x="96" y="106" font-size="9" fill="#6b5b95" text-anchor="middle" opacity="0.8">D</text>
+
+    <!-- Bottom -->
+    <text x="64" y="118" font-size="12" fill="#6b5b95" text-anchor="middle">1</text>
+    <text x="64" y="108" font-size="8" fill="#5f9ea0" text-anchor="middle" opacity="0.8">E</text>
+
+    <!-- Bottom-left -->
+    <text x="26" y="106" font-size="9" fill="#6b5b95" text-anchor="middle" opacity="0.8">F</text>
+    <text x="32" y="96" font-size="11" fill="#5f9ea0" text-anchor="middle">0</text>
+
+    <!-- Left -->
+    <text x="16" y="72" font-size="8" fill="#5f9ea0" text-anchor="middle" opacity="0.8">G</text>
+    <text x="16" y="62" font-size="12" fill="#6b5b95" text-anchor="middle">1</text>
+
+    <!-- Top-left -->
+    <text x="24" y="42" font-size="9" fill="#6b5b95" text-anchor="middle" opacity="0.8">H</text>
+    <text x="32" y="32" font-size="11" fill="#5f9ea0" text-anchor="middle">0</text>
+  </g>
+
+  <!-- Circular arrows (processing/rotation indicators) - like TariffMill -->
+  <!-- Top arc arrow -->
+  <path d="M 45 34 A 30 30 0 0 1 83 34" fill="none" stroke="#6b5b95" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="83,34 77,30 79,38" fill="#6b5b95"/>
+
+  <!-- Bottom arc arrow -->
+  <path d="M 83 94 A 30 30 0 0 1 45 94" fill="none" stroke="#6b5b95" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="45,94 51,98 49,90" fill="#6b5b95"/>
+
+  <!-- Left arc arrow -->
+  <path d="M 34 83 A 30 30 0 0 1 34 45" fill="none" stroke="#5f9ea0" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="34,45 30,51 38,49" fill="#5f9ea0"/>
+
+  <!-- Right arc arrow -->
+  <path d="M 94 45 A 30 30 0 0 1 94 83" fill="none" stroke="#5f9ea0" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="94,83 98,77 90,79" fill="#5f9ea0"/>
+
+  <!-- Center mill wheel -->
+  <circle cx="64" cy="64" r="22" fill="url(#millGradient)" stroke="#4a8a8c" stroke-width="2"/>
+
+  <!-- Mill wheel cross spokes -->
+  <line x1="64" y1="46" x2="64" y2="82" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="46" y1="64" x2="82" y2="64" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Diagonal spokes (lighter) -->
+  <line x1="51" y1="51" x2="77" y2="77" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <line x1="77" y1="51" x2="51" y2="77" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Center hub -->
+  <circle cx="64" cy="64" r="7" fill="url(#accentGradient)" stroke="#5a4a85" stroke-width="1"/>
+
+  <!-- Inner hub highlight -->
+  <circle cx="64" cy="64" r="2.5" fill="#ffffff"/>
+</svg>
