@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for OCRMill
+PyInstaller spec file for OCRMill (PyQt6 Version)
 Packages the application as a standalone Windows executable
 """
 
@@ -13,7 +13,7 @@ block_cipher = None
 project_root = Path(SPECPATH)
 
 a = Analysis(
-    ['invoice_processor_gui.py'],
+    ['ocrmill_app.py'],
     pathex=[str(project_root)],
     binaries=[],
     datas=[
@@ -24,34 +24,73 @@ a = Analysis(
         # Template modules
         ('templates', 'templates'),
 
-        # Resources folder (if it contains data files)
+        # Resources folder
         ('Resources', 'Resources'),
 
-        # DerivativeMill submodule (invoice_processor)
-        ('DerivativeMill/DerivativeMill', 'DerivativeMill/DerivativeMill'),
+        # UI modules
+        ('ui', 'ui'),
+
+        # Core modules
+        ('core', 'core'),
     ],
     hiddenimports=[
-        'tkinter',
-        'tkinter.ttk',
-        'tkinter.filedialog',
-        'tkinter.messagebox',
-        'tkinter.scrolledtext',
+        # PyQt6
+        'PyQt6',
+        'PyQt6.QtWidgets',
+        'PyQt6.QtCore',
+        'PyQt6.QtGui',
+        'PyQt6.sip',
+
+        # PDF processing
         'pdfplumber',
+        'pdfminer',
+        'pdfminer.high_level',
+
+        # Data processing
         'pandas',
         'openpyxl',
         'xlsxwriter',
         'sqlite3',
+
+        # Image handling
         'PIL',
         'PIL.Image',
-        'PIL.ImageTk',
+
+        # Application modules
         'part_description_extractor',
         'parts_database',
         'config_manager',
+        'updater',
+
+        # Templates
         'templates',
+        'templates.base_template',
         'templates.bill_of_lading',
-        'templates.commercial_invoice',
-        'templates.packing_list',
-        'DerivativeMill.DerivativeMill.invoice_processor',
+        'templates.mmcite_czech',
+        'templates.mmcite_brazilian',
+
+        # UI modules
+        'ui',
+        'ui.main_window',
+        'ui.tabs',
+        'ui.tabs.invoice_tab',
+        'ui.tabs.parts_tab',
+        'ui.dialogs',
+        'ui.dialogs.settings_dialog',
+        'ui.dialogs.manufacturers_dialog',
+        'ui.dialogs.hts_reference_dialog',
+        'ui.dialogs.part_dialogs',
+        'ui.widgets',
+        'ui.widgets.drop_zone',
+        'ui.widgets.log_viewer',
+
+        # Core modules
+        'core',
+        'core.workers',
+
+        # Resources
+        'Resources',
+        'Resources.styles',
     ],
     hookspath=[],
     hooksconfig={},
@@ -62,6 +101,7 @@ a = Analysis(
         'numpy.distutils',
         'pytest',
         'IPython',
+        'tkinter',  # No longer needed
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -81,13 +121,13 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # Set to False for GUI app (no console window)
+    console=False,  # GUI app - no console window
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add icon path here if you have one: 'icon.ico'
+    icon='Resources/icon.ico',
 )
 
 coll = COLLECT(
