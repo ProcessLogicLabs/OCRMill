@@ -3,7 +3,7 @@ OCRMill - Invoice Processing Suite
 Unified GUI application for invoice processing and parts database management.
 """
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
@@ -14,16 +14,17 @@ import csv
 import os
 import sys
 import shutil
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List
 
-# Add DerivativeMill submodule to path for invoice_processor import
-DERIVATIVEMILL_PATH = Path(__file__).parent / "DerivativeMill" / "DerivativeMill"
-if DERIVATIVEMILL_PATH.exists():
-    sys.path.insert(0, str(DERIVATIVEMILL_PATH))
+# Add TariffMill submodule to path for invoice_processor import
+TARIFFMILL_PATH = Path(__file__).parent / "TariffMill" / "TariffMill"
+if TARIFFMILL_PATH.exists():
+    sys.path.insert(0, str(TARIFFMILL_PATH))
 
-# Try to import the invoice processor from DerivativeMill
+# Try to import the invoice processor
 try:
     from invoice_processor import InvoiceProcessor
     HAS_INVOICE_PROCESSOR = True
@@ -414,16 +415,24 @@ class ProcessorEngine:
 class ManufacturerEditDialog:
     """Dialog for adding/editing a manufacturer."""
 
-    def __init__(self, parent, db, mfr_id=None, on_save=None):
+    def __init__(self, parent, db, mfr_id=None, on_save=None, icon_path=None):
         self.db = db
         self.mfr_id = mfr_id
         self.on_save = on_save
+        self.icon_path = icon_path
 
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Edit Manufacturer" if mfr_id else "Add Manufacturer")
         self.dialog.geometry("450x250")
         self.dialog.transient(parent)
         self.dialog.grab_set()
+
+        # Set dialog icon
+        if icon_path and Path(icon_path).exists():
+            try:
+                self.dialog.iconbitmap(str(icon_path))
+            except Exception:
+                pass
 
         self._create_widgets()
 
@@ -499,13 +508,21 @@ class ManufacturerEditDialog:
 class ManufacturersDialog:
     """Dialog for managing manufacturers/MID list."""
 
-    def __init__(self, parent, db):
+    def __init__(self, parent, db, icon_path=None):
         self.db = db
+        self.icon_path = icon_path
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Manufacturers / MID List")
         self.dialog.geometry("800x500")
         self.dialog.transient(parent)
         self.dialog.grab_set()
+
+        # Set dialog icon
+        if icon_path and Path(icon_path).exists():
+            try:
+                self.dialog.iconbitmap(str(icon_path))
+            except Exception:
+                pass
 
         self._create_widgets()
         self._load_data()
@@ -613,7 +630,7 @@ class ManufacturersDialog:
 
     def _add_new(self):
         """Add new manufacturer."""
-        ManufacturerEditDialog(self.dialog, self.db, on_save=self._load_data)
+        ManufacturerEditDialog(self.dialog, self.db, on_save=self._load_data, icon_path=self.icon_path)
 
     def _edit_selected(self):
         """Edit selected manufacturer."""
@@ -625,7 +642,7 @@ class ManufacturersDialog:
         item = self.tree.item(selection[0])
         mfr_id = item['values'][0]
 
-        ManufacturerEditDialog(self.dialog, self.db, mfr_id=mfr_id, on_save=self._load_data)
+        ManufacturerEditDialog(self.dialog, self.db, mfr_id=mfr_id, on_save=self._load_data, icon_path=self.icon_path)
 
     def _delete_selected(self):
         """Delete selected manufacturer."""
@@ -673,7 +690,7 @@ class ManufacturersDialog:
 class SettingsDialog:
     """Dialog for application settings including column visibility."""
 
-    def __init__(self, parent, config, on_save=None):
+    def __init__(self, parent, config, on_save=None, icon_path=None):
         self.config = config
         self.on_save = on_save
         self.column_vars = {}
@@ -683,6 +700,13 @@ class SettingsDialog:
         self.dialog.geometry("500x600")
         self.dialog.transient(parent)
         self.dialog.grab_set()
+
+        # Set dialog icon
+        if icon_path and Path(icon_path).exists():
+            try:
+                self.dialog.iconbitmap(str(icon_path))
+            except Exception:
+                pass
 
         self._create_widgets()
         self._load_settings()
@@ -799,6 +823,540 @@ class SettingsDialog:
         self.dialog.destroy()
 
 
+class HTSReferenceDialog:
+    """TariffMill-style HTS Reference Database Dialog."""
+
+    # TariffMill color scheme
+    COLORS = {
+        'bg': '#1e1e1e',
+        'fg': '#ffffff',
+        'header_bg': '#2d2d2d',
+        'header_fg': '#00aaff',
+        'row_odd': '#252526',
+        'row_even': '#1e1e1e',
+        'selected': '#094771',
+        'border': '#3c3c3c',
+        'info_bg': '#2d3748',
+        'info_border': '#4a5568',
+        'button_bg': '#0e639c',
+        'button_hover': '#1177bb',
+        'search_bg': '#3c3c3c',
+    }
+
+    def __init__(self, parent, icon_path=None):
+        self.parent = parent
+        self.icon_path = icon_path
+        self.results = []
+
+        # Find hts.db - check TariffMill location
+        self.hts_db_path = self._find_hts_db()
+
+        self._create_dialog()
+
+    def _find_hts_db(self):
+        """Find the hts.db file in various locations."""
+        possible_paths = [
+            Path(__file__).parent / "Resources" / "References" / "hts.db",
+            Path(__file__).parent.parent / "TariffMill" / "Resources" / "References" / "hts.db",
+            Path(r"C:\Users\hpayne\Documents\DevHouston\Packaged\TariffMill\Resources\References\hts.db"),
+        ]
+
+        for path in possible_paths:
+            if path.exists():
+                return path
+        return None
+
+    def _create_dialog(self):
+        """Create the dialog window."""
+        self.dialog = tk.Toplevel(self.parent)
+        self.dialog.title("HTS Code Database Reference")
+        self.dialog.geometry("1000x700")
+        self.dialog.configure(bg=self.COLORS['bg'])
+
+        # Set icon
+        if self.icon_path and Path(self.icon_path).exists():
+            try:
+                self.dialog.iconbitmap(self.icon_path)
+            except:
+                pass
+
+        # Make dialog modal
+        self.dialog.transient(self.parent)
+        self.dialog.grab_set()
+
+        # Main container
+        main_frame = tk.Frame(self.dialog, bg=self.COLORS['bg'])
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Title row with hamburger menu
+        self._create_title_row(main_frame)
+
+        # Info box
+        self._create_info_box(main_frame)
+
+        # Search bar
+        self._create_search_bar(main_frame)
+
+        # Results table
+        self._create_table(main_frame)
+
+        # Status bar
+        self._create_status_bar(main_frame)
+
+        # Close button
+        self._create_close_button(main_frame)
+
+        # Center dialog
+        self.dialog.update_idletasks()
+        x = (self.dialog.winfo_screenwidth() - self.dialog.winfo_width()) // 2
+        y = (self.dialog.winfo_screenheight() - self.dialog.winfo_height()) // 2
+        self.dialog.geometry(f"+{x}+{y}")
+
+    def _create_title_row(self, parent):
+        """Create title row with hamburger menu."""
+        title_frame = tk.Frame(parent, bg=self.COLORS['bg'])
+        title_frame.pack(fill="x", pady=(0, 10))
+
+        # Title
+        title_label = tk.Label(
+            title_frame,
+            text="HTS Code Database",
+            font=('Segoe UI', 16, 'bold'),
+            bg=self.COLORS['bg'],
+            fg=self.COLORS['header_fg']
+        )
+        title_label.pack(side="left")
+
+        # Hamburger menu button
+        menu_btn = tk.Menubutton(
+            title_frame,
+            text="☰",
+            font=('Segoe UI', 14, 'bold'),
+            bg=self.COLORS['header_bg'],
+            fg=self.COLORS['fg'],
+            activebackground=self.COLORS['selected'],
+            activeforeground=self.COLORS['fg'],
+            relief="flat",
+            padx=10,
+            pady=2
+        )
+        menu_btn.pack(side="right")
+
+        # Create dropdown menu
+        menu = tk.Menu(menu_btn, tearoff=0, bg=self.COLORS['header_bg'], fg=self.COLORS['fg'],
+                       activebackground=self.COLORS['selected'], activeforeground=self.COLORS['fg'])
+        menu.add_command(label="Open USITC Download Page", command=self._open_usitc_page)
+        menu.add_separator()
+        menu.add_command(label="About HTS Database", command=self._show_about)
+        menu_btn.config(menu=menu)
+
+    def _create_info_box(self, parent):
+        """Create information box with version info."""
+        info_frame = tk.LabelFrame(
+            parent,
+            text="Reference Information",
+            font=('Segoe UI', 10, 'bold'),
+            bg=self.COLORS['info_bg'],
+            fg=self.COLORS['header_fg'],
+            padx=10,
+            pady=5
+        )
+        info_frame.pack(fill="x", pady=(0, 10))
+
+        info_text = tk.Label(
+            info_frame,
+            text="This table contains HTS (Harmonized Tariff Schedule) codes with their descriptions, "
+                 "units of quantity, and duty rates. Use this reference to look up tariff classifications.",
+            font=('Segoe UI', 9),
+            bg=self.COLORS['info_bg'],
+            fg=self.COLORS['fg'],
+            wraplength=950,
+            justify="left"
+        )
+        info_text.pack(anchor="w")
+
+        # Version/status label
+        if self.hts_db_path and self.hts_db_path.exists():
+            db_info = f"Database: {self.hts_db_path.name}"
+            try:
+                # Get record count
+                conn = sqlite3.connect(str(self.hts_db_path))
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM hts_codes")
+                count = cursor.fetchone()[0]
+                conn.close()
+                db_info += f" ({count:,} records)"
+            except:
+                pass
+            status_color = "#00ff00"
+        else:
+            db_info = "Database not found - please configure hts.db location"
+            status_color = "#ff6666"
+
+        self.version_label = tk.Label(
+            info_frame,
+            text=db_info,
+            font=('Segoe UI', 9, 'bold'),
+            bg=self.COLORS['info_bg'],
+            fg=status_color
+        )
+        self.version_label.pack(anchor="w", pady=(5, 0))
+
+    def _create_search_bar(self, parent):
+        """Create search bar with advanced search support."""
+        search_frame = tk.Frame(parent, bg=self.COLORS['bg'])
+        search_frame.pack(fill="x", pady=(0, 10))
+
+        # Search entry
+        self.search_var = tk.StringVar()
+        self.search_entry = tk.Entry(
+            search_frame,
+            textvariable=self.search_var,
+            font=('Segoe UI', 11),
+            bg=self.COLORS['search_bg'],
+            fg=self.COLORS['fg'],
+            insertbackground=self.COLORS['fg'],
+            relief="flat",
+            width=60
+        )
+        self.search_entry.pack(side="left", fill="x", expand=True, padx=(0, 10), ipady=5)
+        self.search_entry.insert(0, "")
+
+        # Placeholder text
+        self.search_entry.bind('<FocusIn>', self._on_search_focus_in)
+        self.search_entry.bind('<FocusOut>', self._on_search_focus_out)
+        self.search_entry.bind('<Return>', lambda e: self._search())
+        self._show_placeholder()
+
+        # Search button
+        search_btn = tk.Button(
+            search_frame,
+            text="Search",
+            font=('Segoe UI', 10),
+            bg=self.COLORS['button_bg'],
+            fg=self.COLORS['fg'],
+            activebackground=self.COLORS['button_hover'],
+            activeforeground=self.COLORS['fg'],
+            relief="flat",
+            padx=15,
+            pady=3,
+            command=self._search
+        )
+        search_btn.pack(side="left", padx=(0, 5))
+
+        # Clear button
+        clear_btn = tk.Button(
+            search_frame,
+            text="Clear",
+            font=('Segoe UI', 10),
+            bg=self.COLORS['header_bg'],
+            fg=self.COLORS['fg'],
+            activebackground=self.COLORS['border'],
+            activeforeground=self.COLORS['fg'],
+            relief="flat",
+            padx=15,
+            pady=3,
+            command=self._clear_search
+        )
+        clear_btn.pack(side="left")
+
+    def _show_placeholder(self):
+        """Show placeholder text in search entry."""
+        if not self.search_var.get():
+            self.search_entry.insert(0, "Search: multiple words (AND), word1 | word2 (OR), % wildcard...")
+            self.search_entry.config(fg='#888888')
+
+    def _on_search_focus_in(self, event):
+        """Handle focus in on search entry."""
+        if self.search_entry.get() == "Search: multiple words (AND), word1 | word2 (OR), % wildcard...":
+            self.search_entry.delete(0, tk.END)
+            self.search_entry.config(fg=self.COLORS['fg'])
+
+    def _on_search_focus_out(self, event):
+        """Handle focus out on search entry."""
+        if not self.search_entry.get():
+            self._show_placeholder()
+
+    def _create_table(self, parent):
+        """Create the results table."""
+        # Table frame with scrollbars
+        table_frame = tk.Frame(parent, bg=self.COLORS['bg'])
+        table_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+        # Create treeview with custom style
+        style = ttk.Style()
+        style.configure(
+            "HTS.Treeview",
+            background=self.COLORS['row_odd'],
+            foreground=self.COLORS['fg'],
+            fieldbackground=self.COLORS['row_odd'],
+            rowheight=25
+        )
+        style.configure(
+            "HTS.Treeview.Heading",
+            background=self.COLORS['header_bg'],
+            foreground=self.COLORS['header_fg'],
+            font=('Segoe UI', 10, 'bold')
+        )
+        style.map("HTS.Treeview",
+                  background=[('selected', self.COLORS['selected'])],
+                  foreground=[('selected', self.COLORS['fg'])])
+
+        # Columns
+        columns = ("hts_code", "description", "unit_qty", "general_rate", "special_rate", "chapter")
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings",
+            style="HTS.Treeview"
+        )
+
+        # Configure columns
+        self.tree.heading("hts_code", text="HTS Code")
+        self.tree.heading("description", text="Description")
+        self.tree.heading("unit_qty", text="Unit of Qty")
+        self.tree.heading("general_rate", text="General Rate")
+        self.tree.heading("special_rate", text="Special Rate")
+        self.tree.heading("chapter", text="Chapter")
+
+        self.tree.column("hts_code", width=120, minwidth=100)
+        self.tree.column("description", width=450, minwidth=200)
+        self.tree.column("unit_qty", width=80, minwidth=60)
+        self.tree.column("general_rate", width=100, minwidth=80)
+        self.tree.column("special_rate", width=100, minwidth=80)
+        self.tree.column("chapter", width=60, minwidth=50)
+
+        # Scrollbars
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        # Grid layout
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+
+        # Bind double-click to copy HTS code
+        self.tree.bind('<Double-1>', self._on_double_click)
+
+    def _create_status_bar(self, parent):
+        """Create status bar showing result count."""
+        self.status_label = tk.Label(
+            parent,
+            text="Enter a search term to find HTS codes (showing first 500 results)",
+            font=('Segoe UI', 9, 'bold'),
+            bg=self.COLORS['bg'],
+            fg=self.COLORS['fg'],
+            anchor="w"
+        )
+        self.status_label.pack(fill="x", pady=(0, 10))
+
+    def _create_close_button(self, parent):
+        """Create close button."""
+        btn_frame = tk.Frame(parent, bg=self.COLORS['bg'])
+        btn_frame.pack(fill="x")
+
+        # Warning note
+        note_label = tk.Label(
+            btn_frame,
+            text="Note: Double-click a row to copy the HTS code to clipboard",
+            font=('Segoe UI', 9, 'italic'),
+            bg=self.COLORS['bg'],
+            fg='#888888'
+        )
+        note_label.pack(side="left")
+
+        close_btn = tk.Button(
+            btn_frame,
+            text="Close",
+            font=('Segoe UI', 10),
+            bg=self.COLORS['header_bg'],
+            fg=self.COLORS['fg'],
+            activebackground=self.COLORS['border'],
+            activeforeground=self.COLORS['fg'],
+            relief="flat",
+            padx=20,
+            pady=5,
+            command=self.dialog.destroy
+        )
+        close_btn.pack(side="right")
+
+    def _search(self):
+        """Perform search with AND/OR/wildcard support."""
+        search_term = self.search_var.get().strip()
+        if search_term == "Search: multiple words (AND), word1 | word2 (OR), % wildcard...":
+            search_term = ""
+
+        if not self.hts_db_path or not self.hts_db_path.exists():
+            messagebox.showerror("Error", "HTS database not found")
+            return
+
+        # Clear existing results
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        if not search_term:
+            self.status_label.config(text="Enter a search term to find HTS codes")
+            return
+
+        try:
+            conn = sqlite3.connect(str(self.hts_db_path))
+            cursor = conn.cursor()
+
+            # Get available columns
+            cursor.execute("PRAGMA table_info(hts_codes)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            # Build query based on search term
+            conditions, params = self._build_search_conditions(search_term, columns)
+
+            # Build SELECT with available columns
+            select_cols = ['full_code', 'description']
+            if 'unit_of_quantity' in columns:
+                select_cols.append('unit_of_quantity')
+            else:
+                select_cols.append("'' as unit_of_quantity")
+            if 'general_rate' in columns:
+                select_cols.append('general_rate')
+            else:
+                select_cols.append("'' as general_rate")
+            if 'special_rate' in columns:
+                select_cols.append('special_rate')
+            else:
+                select_cols.append("'' as special_rate")
+            if 'chapter' in columns:
+                select_cols.append('chapter')
+            else:
+                select_cols.append("'' as chapter")
+
+            query = f"SELECT {', '.join(select_cols)} FROM hts_codes WHERE {conditions} LIMIT 500"
+
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            conn.close()
+
+            # Populate tree
+            for i, row in enumerate(results):
+                tag = 'odd' if i % 2 else 'even'
+                self.tree.insert("", "end", values=row, tags=(tag,))
+
+            # Configure row colors
+            self.tree.tag_configure('odd', background=self.COLORS['row_odd'])
+            self.tree.tag_configure('even', background=self.COLORS['row_even'])
+
+            # Update status
+            if len(results) >= 500:
+                self.status_label.config(text=f"Showing first 500 results (more available, refine your search)")
+            else:
+                self.status_label.config(text=f"Found {len(results)} results")
+
+        except Exception as e:
+            messagebox.showerror("Search Error", f"Error searching database: {e}")
+
+    def _build_search_conditions(self, search_term, columns):
+        """Build SQL WHERE conditions for search.
+
+        Supports:
+        - Multiple words: AND search (all words must match)
+        - OR search: Use | or OR between terms
+        - Wildcard: Use % for wildcards
+        - HTS code: Start with digit to search codes
+        """
+        # Check for OR operator
+        if ' | ' in search_term or ' OR ' in search_term.upper():
+            # Split by OR operators
+            parts = search_term.replace(' OR ', ' | ').replace(' or ', ' | ').split(' | ')
+            or_conditions = []
+            all_params = []
+
+            for part in parts:
+                part = part.strip()
+                if part:
+                    cond, params = self._build_single_condition(part)
+                    or_conditions.append(f"({cond})")
+                    all_params.extend(params)
+
+            return ' OR '.join(or_conditions), all_params
+        else:
+            # AND search - all words must match
+            words = search_term.split()
+            and_conditions = []
+            all_params = []
+
+            for word in words:
+                word = word.strip()
+                if word:
+                    cond, params = self._build_single_condition(word)
+                    and_conditions.append(f"({cond})")
+                    all_params.extend(params)
+
+            return ' AND '.join(and_conditions) if and_conditions else "1=1", all_params
+
+    def _build_single_condition(self, term):
+        """Build condition for a single search term."""
+        term = term.strip()
+        if not term:
+            return "1=1", []
+
+        has_wildcard = '%' in term
+        is_code_search = term[0].isdigit()
+
+        if is_code_search:
+            clean_code = term.replace('.', '')
+            if has_wildcard:
+                code_pattern = clean_code
+            else:
+                code_pattern = f"{clean_code}%"
+            return "full_code LIKE ?", [code_pattern]
+        else:
+            if has_wildcard:
+                search_pattern = term
+            else:
+                search_pattern = f"%{term}%"
+            return "description LIKE ? COLLATE NOCASE", [search_pattern]
+
+    def _clear_search(self):
+        """Clear search and results."""
+        self.search_var.set("")
+        self._show_placeholder()
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self.status_label.config(text="Enter a search term to find HTS codes (showing first 500 results)")
+
+    def _on_double_click(self, event):
+        """Handle double-click to copy HTS code."""
+        selection = self.tree.selection()
+        if selection:
+            item = self.tree.item(selection[0])
+            hts_code = item['values'][0]
+            self.dialog.clipboard_clear()
+            self.dialog.clipboard_append(hts_code)
+            self.status_label.config(text=f"Copied HTS code: {hts_code}")
+
+    def _open_usitc_page(self):
+        """Open USITC download page."""
+        import webbrowser
+        webbrowser.open("https://hts.usitc.gov/export")
+
+    def _show_about(self):
+        """Show about information."""
+        messagebox.showinfo(
+            "About HTS Database",
+            "HTS Code Database Reference\n\n"
+            "This database contains Harmonized Tariff Schedule codes from the "
+            "U.S. International Trade Commission (USITC).\n\n"
+            "Search Tips:\n"
+            "• Multiple words: AND search (all must match)\n"
+            "• Use | or OR: either term matches\n"
+            "• Use % as wildcard: alum% matches aluminum\n"
+            "• Start with digit: searches HTS codes"
+        )
+
+
 class OCRMillApp:
     """Unified OCRMill Application - Invoice Processing Suite."""
 
@@ -811,6 +1369,14 @@ class OCRMillApp:
 
         self.root.title(f"OCRMill - Invoice Processing Suite v{__version__}")
         self.root.geometry("1200x750")
+
+        # Set application icon
+        self.icon_path = Path(__file__).parent / "Resources" / "icon.ico"
+        if self.icon_path.exists():
+            try:
+                self.root.iconbitmap(str(self.icon_path))
+            except Exception:
+                pass  # Icon not available
 
         # Configure ttk styles for tabs with shading
         self._configure_styles()
@@ -891,6 +1457,7 @@ class OCRMillApp:
         lists_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Lists", menu=lists_menu)
         lists_menu.add_command(label="Manufacturers/MID...", command=self._show_manufacturers_dialog)
+        lists_menu.add_command(label="HTS Reference...", command=self._show_hts_reference_dialog)
 
         # Processing menu
         proc_menu = tk.Menu(menubar, tearoff=0)
@@ -933,23 +1500,6 @@ class OCRMillApp:
         self.main_notebook.add(self.parts_frame, text="Parts Database")
         self._create_parts_database_tab()
 
-        # === CBP Export Tab ===
-        self.cbp_frame = ttk.Frame(self.main_notebook)
-        self.main_notebook.add(self.cbp_frame, text="CBP Export")
-        self._create_cbp_export_tab()
-
-        # Bind tab change event for auto-refresh
-        self.main_notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
-
-    def _on_tab_changed(self, event):
-        """Handle notebook tab selection changes."""
-        selected_tab = event.widget.select()
-        tab_text = event.widget.tab(selected_tab, "text")
-
-        # Auto-refresh CBP Export tab when selected
-        if tab_text == "CBP Export":
-            self._refresh_cbp_list()
-
     def _create_invoice_processing_tab(self):
         """Create the invoice processing tab content."""
         self.invoice_frame.grid_columnconfigure(0, weight=1)
@@ -964,27 +1514,58 @@ class OCRMillApp:
         self.status_label = ttk.Label(header_frame, text="Stopped", foreground="red", font=('Helvetica', 11))
         self.status_label.pack(side=tk.RIGHT, padx=10)
 
-        # === Settings Frame ===
-        settings_frame = ttk.LabelFrame(self.invoice_frame, text="Settings", padding="10")
-        settings_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        # === Settings Frame (Scrollable) ===
+        settings_container = ttk.LabelFrame(self.invoice_frame, text="Controls", padding="5")
+        settings_container.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        settings_container.grid_columnconfigure(0, weight=1)
+
+        # Create canvas for scrolling
+        settings_canvas = tk.Canvas(settings_container, height=160, highlightthickness=0)
+        settings_scrollbar = ttk.Scrollbar(settings_container, orient="vertical", command=settings_canvas.yview)
+        settings_canvas.configure(yscrollcommand=settings_scrollbar.set)
+
+        # Create frame inside canvas for content
+        settings_frame = ttk.Frame(settings_canvas)
         settings_frame.grid_columnconfigure(1, weight=1)
 
+        # Create window in canvas
+        settings_canvas.create_window((0, 0), window=settings_frame, anchor="nw")
+
+        # Pack canvas and scrollbar
+        settings_canvas.pack(side="left", fill="both", expand=True)
+        settings_scrollbar.pack(side="right", fill="y")
+
+        # Configure scroll region when frame size changes
+        def configure_scroll_region(event):
+            settings_canvas.configure(scrollregion=settings_canvas.bbox("all"))
+            # Also update the canvas width to match container
+            settings_canvas.itemconfig(settings_canvas.find_withtag("all")[0], width=event.width - 20)
+
+        settings_frame.bind("<Configure>", configure_scroll_region)
+
+        # Enable mouse wheel scrolling
+        def on_mousewheel(event):
+            settings_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+        settings_canvas.bind("<Enter>", lambda e: settings_canvas.bind_all("<MouseWheel>", on_mousewheel))
+        settings_canvas.bind("<Leave>", lambda e: settings_canvas.unbind_all("<MouseWheel>"))
+
         # Input folder
-        ttk.Label(settings_frame, text="Input Folder:").grid(row=0, column=0, sticky="w", pady=2)
+        ttk.Label(settings_frame, text="Input Folder:").grid(row=0, column=0, sticky="w", pady=2, padx=5)
         self.input_var = tk.StringVar(value=str(self.config.input_folder))
         input_entry = ttk.Entry(settings_frame, textvariable=self.input_var)
         input_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
-        ttk.Button(settings_frame, text="Browse...", command=self._browse_input).grid(row=0, column=2, pady=2)
+        ttk.Button(settings_frame, text="Browse...", command=self._browse_input).grid(row=0, column=2, pady=2, padx=5)
 
         # Output folder
-        ttk.Label(settings_frame, text="Output Folder:").grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(settings_frame, text="Output Folder:").grid(row=1, column=0, sticky="w", pady=2, padx=5)
         self.output_var = tk.StringVar(value=str(self.config.output_folder))
         output_entry = ttk.Entry(settings_frame, textvariable=self.output_var)
         output_entry.grid(row=1, column=1, sticky="ew", padx=5, pady=2)
-        ttk.Button(settings_frame, text="Browse...", command=self._browse_output).grid(row=1, column=2, pady=2)
+        ttk.Button(settings_frame, text="Browse...", command=self._browse_output).grid(row=1, column=2, pady=2, padx=5)
 
         # Poll interval
-        ttk.Label(settings_frame, text="Poll Interval (sec):").grid(row=2, column=0, sticky="w", pady=2)
+        ttk.Label(settings_frame, text="Poll Interval (sec):").grid(row=2, column=0, sticky="w", pady=2, padx=5)
         self.poll_var = tk.StringVar(value=str(self.config.poll_interval))
         poll_spinbox = ttk.Spinbox(settings_frame, from_=5, to=300, textvariable=self.poll_var, width=10)
         poll_spinbox.grid(row=2, column=1, sticky="w", padx=5, pady=2)
@@ -992,17 +1573,17 @@ class OCRMillApp:
         # Auto-start checkbox
         self.autostart_var = tk.BooleanVar(value=self.config.auto_start)
         ttk.Checkbutton(settings_frame, text="Auto-start on launch", variable=self.autostart_var,
-                       command=self._save_autostart).grid(row=2, column=2, pady=2)
+                       command=self._save_autostart).grid(row=2, column=2, pady=2, padx=5)
 
         # Multi-invoice consolidation option
-        ttk.Label(settings_frame, text="Multi-Invoice PDFs:").grid(row=3, column=0, sticky="w", pady=2)
+        ttk.Label(settings_frame, text="Multi-Invoice PDFs:").grid(row=3, column=0, sticky="w", pady=2, padx=5)
         self.consolidate_var = tk.BooleanVar(value=self.config.consolidate_multi_invoice)
         ttk.Checkbutton(settings_frame, text="Consolidate into one CSV per PDF",
                        variable=self.consolidate_var,
                        command=self._save_consolidate).grid(row=3, column=1, sticky="w", padx=5, pady=2, columnspan=2)
 
         # Auto CBP Export option
-        ttk.Label(settings_frame, text="Auto CBP Export:").grid(row=4, column=0, sticky="w", pady=2)
+        ttk.Label(settings_frame, text="Auto CBP Export:").grid(row=4, column=0, sticky="w", pady=2, padx=5)
         self.auto_cbp_var = tk.BooleanVar(value=self.config.auto_cbp_export)
         ttk.Checkbutton(settings_frame, text="Auto-generate CBP export after processing",
                        variable=self.auto_cbp_var,
@@ -1129,6 +1710,50 @@ To add a new template:
 
         ttk.Button(proc_stats_frame, text="Refresh Statistics", command=self._update_proc_statistics).pack(pady=10)
 
+        # --- Input Files Tab ---
+        input_files_frame = ttk.Frame(sub_notebook, padding="5")
+        sub_notebook.add(input_files_frame, text="Input Files")
+        input_files_frame.grid_columnconfigure(0, weight=1)
+        input_files_frame.grid_rowconfigure(1, weight=1)
+
+        # Input folder display
+        input_folder_frame = ttk.Frame(input_files_frame)
+        input_folder_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        input_folder_frame.grid_columnconfigure(1, weight=1)
+
+        ttk.Label(input_folder_frame, text="Input Folder:", font=('', 9, 'bold')).grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.input_files_path_var = tk.StringVar(value=str(self.config.input_folder))
+        input_path_label = ttk.Label(input_folder_frame, textvariable=self.input_files_path_var, foreground="blue", cursor="hand2")
+        input_path_label.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        input_path_label.bind("<Button-1>", lambda _: self._open_input_folder())
+
+        ttk.Button(input_folder_frame, text="Browse Folder", command=self._open_input_folder).grid(row=0, column=2, padx=5, pady=2)
+        ttk.Button(input_folder_frame, text="Refresh List", command=self._refresh_input_files).grid(row=0, column=3, padx=5, pady=2)
+
+        # Input file list
+        input_list_frame = ttk.LabelFrame(input_files_frame, text="Pending PDF Files", padding="5")
+        input_list_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        input_list_frame.grid_columnconfigure(0, weight=1)
+        input_list_frame.grid_rowconfigure(0, weight=1)
+
+        # Listbox with scrollbar
+        input_scroll = ttk.Scrollbar(input_list_frame, orient="vertical")
+        self.input_files_listbox = tk.Listbox(input_list_frame, yscrollcommand=input_scroll.set, font=('Consolas', 9))
+        input_scroll.config(command=self.input_files_listbox.yview)
+
+        self.input_files_listbox.grid(row=0, column=0, sticky="nsew")
+        input_scroll.grid(row=0, column=1, sticky="ns")
+
+        # Buttons
+        input_btn_frame = ttk.Frame(input_list_frame)
+        input_btn_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
+
+        ttk.Button(input_btn_frame, text="Delete", command=self._delete_input_file).pack(side=tk.LEFT, padx=5)
+        ttk.Button(input_btn_frame, text="Process Selected", command=self._process_selected_input).pack(side=tk.LEFT, padx=5)
+
+        # Initial file list load
+        self._refresh_input_files()
+
         # --- Output Files Tab ---
         output_files_frame = ttk.Frame(sub_notebook, padding="5")
         sub_notebook.add(output_files_frame, text="Output Files")
@@ -1172,7 +1797,7 @@ To add a new template:
 
         ttk.Button(btn_frame, text="Open File", command=self._open_selected_output_file).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Open in Excel", command=self._open_selected_output_file_excel).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Open Folder", command=self._open_output_folder).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Delete", command=self._delete_output_file).pack(side=tk.LEFT, padx=5)
 
         # Initial file list load
         self._refresh_output_files()
@@ -1399,324 +2024,30 @@ To add a new template:
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
 
-    def _create_cbp_export_tab(self):
-        """Create the CBP Export tab for Section 232 processing."""
-        self.cbp_frame.grid_columnconfigure(0, weight=1)
-        self.cbp_frame.grid_rowconfigure(2, weight=1)
-
-        # === Header Frame ===
-        header_frame = ttk.Frame(self.cbp_frame, padding="10")
-        header_frame.grid(row=0, column=0, sticky="ew")
-
-        ttk.Label(header_frame, text="CBP Export - Section 232 Processing",
-                  font=('Helvetica', 14, 'bold')).pack(side=tk.LEFT)
-
-        # Status indicator
-        self.cbp_status_label = ttk.Label(header_frame, text="", font=('Helvetica', 10))
-        self.cbp_status_label.pack(side=tk.RIGHT, padx=10)
-
-        if not HAS_INVOICE_PROCESSOR:
-            self.cbp_status_label.config(text="Invoice Processor not available", foreground="red")
-
-        # === Settings Frame ===
-        settings_frame = ttk.LabelFrame(self.cbp_frame, text="Export Settings", padding="10")
-        settings_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
-        settings_frame.grid_columnconfigure(1, weight=1)
-
-        # Input folder (processed CSVs) - load from config
-        ttk.Label(settings_frame, text="Input Folder:").grid(row=0, column=0, sticky="w", pady=2)
-        cbp_input_path = Path(self.config.cbp_input_folder).resolve()
-        self.cbp_input_var = tk.StringVar(value=str(cbp_input_path))
-        ttk.Entry(settings_frame, textvariable=self.cbp_input_var, width=50).grid(row=0, column=1, sticky="ew", padx=5)
-        ttk.Button(settings_frame, text="Browse...", command=self._browse_cbp_input).grid(row=0, column=2)
-
-        # Output folder for CBP Excel files - load from config
-        ttk.Label(settings_frame, text="Output Folder:").grid(row=1, column=0, sticky="w", pady=2)
-        cbp_output_path = Path(self.config.cbp_output_folder).resolve()
-        self.cbp_output_var = tk.StringVar(value=str(cbp_output_path))
-        ttk.Entry(settings_frame, textvariable=self.cbp_output_var, width=50).grid(row=1, column=1, sticky="ew", padx=5)
-        ttk.Button(settings_frame, text="Browse...", command=self._browse_cbp_output).grid(row=1, column=2)
-
-        # Total shipment weight display (auto-populated from selected CSV)
-        weight_label = ttk.Label(settings_frame, text="Total Shipment Weight (kg):")
-        weight_label.grid(row=2, column=0, sticky="w", pady=2)
-        self.cbp_weight_var = tk.StringVar(value="0")
-        weight_entry = ttk.Entry(settings_frame, textvariable=self.cbp_weight_var, width=15, state='readonly')
-        weight_entry.grid(row=2, column=1, sticky="w", padx=5)
-
-        # Add tooltip explaining weight usage
-        try:
-            from tktooltip import ToolTip
-            ToolTip(weight_label, msg="Auto-populated from bol_gross_weight column in selected CSV file.\nUsed to prorate weight across invoice items.", delay=0.5)
-        except ImportError:
-            pass  # Tooltip library not available
-
-        # Buttons frame
-        btn_frame = ttk.Frame(settings_frame)
-        btn_frame.grid(row=3, column=0, columnspan=3, pady=10)
-
-        self.cbp_process_btn = ttk.Button(btn_frame, text="Process Selected CSV",
-                                          command=self._process_cbp_single, width=20)
-        self.cbp_process_btn.pack(side=tk.LEFT, padx=5)
-
-        self.cbp_process_all_btn = ttk.Button(btn_frame, text="Process All CSVs",
-                                               command=self._process_cbp_all, width=20)
-        self.cbp_process_all_btn.pack(side=tk.LEFT, padx=5)
-
-        if not HAS_INVOICE_PROCESSOR:
-            self.cbp_process_btn.config(state='disabled')
-            self.cbp_process_all_btn.config(state='disabled')
-
-        # === File List Frame ===
-        list_frame = ttk.LabelFrame(self.cbp_frame, text="Available CSV Files", padding="5")
-        list_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
-        list_frame.grid_columnconfigure(0, weight=1)
-        list_frame.grid_rowconfigure(0, weight=1)
-
-        # Treeview for CSV files
-        columns = ("filename", "date", "invoices", "items", "status")
-        self.cbp_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=10)
-
-        self.cbp_tree.heading("filename", text="Filename")
-        self.cbp_tree.heading("date", text="Date")
-        self.cbp_tree.heading("invoices", text="Invoices")
-        self.cbp_tree.heading("items", text="Items")
-        self.cbp_tree.heading("status", text="Status")
-
-        self.cbp_tree.column("filename", width=300)
-        self.cbp_tree.column("date", width=140)
-        self.cbp_tree.column("invoices", width=80)
-        self.cbp_tree.column("items", width=80)
-        self.cbp_tree.column("status", width=100)
-
-        vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.cbp_tree.yview)
-        self.cbp_tree.configure(yscrollcommand=vsb.set)
-
-        self.cbp_tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-
-        # Bind selection event to update weight display
-        self.cbp_tree.bind("<<TreeviewSelect>>", self._on_cbp_file_select)
-
-        # Refresh button
-        ttk.Button(list_frame, text="Refresh List", command=self._refresh_cbp_list).grid(row=1, column=0, pady=5)
-
-        # === Log Frame ===
-        log_frame = ttk.LabelFrame(self.cbp_frame, text="Processing Log", padding="5")
-        log_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
-        log_frame.grid_columnconfigure(0, weight=1)
-
-        self.cbp_log_text = scrolledtext.ScrolledText(log_frame, state='disabled', font=('Consolas', 9), height=6)
-        self.cbp_log_text.pack(fill="x", expand=False)
-
-        # Initial refresh
-        self.root.after(500, self._refresh_cbp_list)
-
-    def _browse_cbp_input(self):
-        """Browse for CBP input folder."""
-        folder = filedialog.askdirectory(initialdir=self.cbp_input_var.get())
-        if folder:
-            # Normalize path to Windows format with backslashes
-            normalized_path = str(Path(folder).resolve())
-            self.cbp_input_var.set(normalized_path)
-            # Save to config
-            self.config.cbp_input_folder = normalized_path
-            self._refresh_cbp_list()
-
-    def _browse_cbp_output(self):
-        """Browse for CBP output folder."""
-        folder = filedialog.askdirectory(initialdir=self.cbp_output_var.get())
-        if folder:
-            # Normalize path to Windows format with backslashes
-            normalized_path = str(Path(folder).resolve())
-            self.cbp_output_var.set(normalized_path)
-            # Save to config
-            self.config.cbp_output_folder = normalized_path
-
-    def _refresh_cbp_list(self):
-        """Refresh the list of available CSV files."""
-        # Clear existing items
-        for item in self.cbp_tree.get_children():
-            self.cbp_tree.delete(item)
-
-        input_folder = Path(self.cbp_input_var.get())
-        if not input_folder.exists():
-            return
-
-        # Find all CSV files
-        csv_files = sorted(input_folder.glob("*.csv"), key=lambda x: x.stat().st_mtime, reverse=True)
-
-        for csv_file in csv_files:
-            try:
-                # Read CSV to get info
-                with open(csv_file, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    rows = list(reader)
-
-                item_count = len(rows)
-                invoice_set = set()
-                for row in rows:
-                    if 'invoice_number' in row:
-                        invoice_set.add(row['invoice_number'])
-
-                invoice_count = len(invoice_set) if invoice_set else 1
-
-                # Check if already processed - look for any invoice files from this CSV
-                output_folder = Path(self.cbp_output_var.get())
-                status = "Pending"
-
-                if invoice_set:
-                    # Check if any invoice files exist (format: {invoice_number}_{date}.xlsx)
-                    for invoice_num in invoice_set:
-                        safe_invoice = str(invoice_num).replace('/', '_').replace('\\', '_')
-                        # Look for any file starting with this invoice number
-                        matching_files = list(output_folder.glob(f"{safe_invoice}_*.xlsx"))
-                        if matching_files:
-                            status = "Exported"
-                            break
-                else:
-                    # Fallback for old format or single file
-                    if list(output_folder.glob(f"{csv_file.stem}_*.xlsx")):
-                        status = "Exported"
-
-                # Get modification date with time
-                mod_time = datetime.fromtimestamp(csv_file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-
-                self.cbp_tree.insert("", "end", values=(
-                    csv_file.name,
-                    mod_time,
-                    invoice_count,
-                    item_count,
-                    status
-                ))
-            except Exception as e:
-                self.cbp_tree.insert("", "end", values=(csv_file.name, "", "", "", f"Error: {e}"))
-
-    def _on_cbp_file_select(self, event=None):
-        """Handle CSV file selection - update weight display from bol_gross_weight column."""
-        selection = self.cbp_tree.selection()
-        if not selection:
-            self.cbp_weight_var.set("0")
-            return
-
-        try:
-            # Get selected filename
-            item = self.cbp_tree.item(selection[0])
-            filename = item['values'][0]
-            input_path = Path(self.cbp_input_var.get()) / filename
-
-            # Read CSV and extract bol_gross_weight
-            import csv
-            with open(input_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
-
-            # Look for bol_gross_weight column
-            if rows and 'bol_gross_weight' in rows[0]:
-                # Get first non-empty bol_gross_weight value
-                for row in rows:
-                    bol_weight = row.get('bol_gross_weight', '').strip()
-                    if bol_weight:
-                        try:
-                            # Validate it's a number and display it
-                            weight_float = float(bol_weight)
-                            self.cbp_weight_var.set(f"{weight_float:.3f}")
-                            return
-                        except ValueError:
-                            continue
-
-            # If no bol_gross_weight found, set to 0
-            self.cbp_weight_var.set("0")
-
-        except Exception as e:
-            self.cbp_weight_var.set("0")
-            self._cbp_log(f"Error reading weight from CSV: {e}")
-
-    def _cbp_log(self, message: str):
-        """Log a message to the CBP log."""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.cbp_log_text.configure(state='normal')
-        self.cbp_log_text.insert(tk.END, f"[{timestamp}] {message}\n")
-        self.cbp_log_text.see(tk.END)
-        self.cbp_log_text.configure(state='disabled')
-
-    def _process_cbp_single(self):
-        """Process selected CSV file through invoice processor."""
-        if not HAS_INVOICE_PROCESSOR:
-            messagebox.showerror("Error", "Invoice Processor module not available.\nCheck DerivativeMill submodule.")
-            return
-
-        selection = self.cbp_tree.selection()
-        if not selection:
-            messagebox.showwarning("No Selection", "Please select a CSV file to process.")
-            return
-
-        item = self.cbp_tree.item(selection[0])
-        filename = item['values'][0]
-        input_path = Path(self.cbp_input_var.get()) / filename
-
-        self._process_cbp_file(input_path)
-
-    def _process_cbp_all(self):
-        """Process all pending CSV files."""
-        if not HAS_INVOICE_PROCESSOR:
-            messagebox.showerror("Error", "Invoice Processor module not available.\nCheck DerivativeMill submodule.")
-            return
-
-        input_folder = Path(self.cbp_input_var.get())
-        output_folder = Path(self.cbp_output_var.get())
-
-        csv_files = list(input_folder.glob("*.csv"))
-        pending_files = []
-
-        for csv_file in csv_files:
-            output_file = output_folder / f"{csv_file.stem}_CBP.xlsx"
-            if not output_file.exists():
-                pending_files.append(csv_file)
-
-        if not pending_files:
-            messagebox.showinfo("All Done", "All CSV files have already been exported.")
-            return
-
-        if not messagebox.askyesno("Process All",
-                                   f"Process {len(pending_files)} pending CSV file(s)?"):
-            return
-
-        for csv_file in pending_files:
-            self._process_cbp_file(csv_file)
-
-        self._refresh_cbp_list()
-
     def _process_cbp_file(self, csv_path: Path):
         """Process a single CSV file through the invoice processor."""
         import pandas as pd
 
         try:
-            self._cbp_log(f"Processing: {csv_path.name}")
+            self._queue_log(f"CBP Export: Processing {csv_path.name}")
 
             # Read the CSV
             df = pd.read_csv(csv_path)
-            self._cbp_log(f"  Loaded {len(df)} rows")
+            self._queue_log(f"  Loaded {len(df)} rows")
 
-            # Get net weight from input or from CSV if available
-            try:
-                net_weight = float(self.cbp_weight_var.get())
-            except ValueError:
-                net_weight = 0.0
-
-            # If net weight is 0, try to get from CSV columns
-            if net_weight == 0:
-                # First try bol_gross_weight (total BOL shipment weight)
-                if 'bol_gross_weight' in df.columns:
-                    # Use first non-null bol_gross_weight value (all items should have same BOL weight)
-                    bol_weights = df['bol_gross_weight'].dropna()
-                    if len(bol_weights) > 0:
-                        net_weight = float(bol_weights.iloc[0])
-                        self._cbp_log(f"  Using BOL gross weight from CSV: {net_weight:.2f} kg")
-                # Otherwise try summing net_weight column
-                elif 'net_weight' in df.columns:
-                    net_weight = df['net_weight'].sum()
-                    self._cbp_log(f"  Using net weight from CSV: {net_weight:.2f} kg")
+            # Get net weight from CSV columns
+            net_weight = 0.0
+            # First try bol_gross_weight (total BOL shipment weight)
+            if 'bol_gross_weight' in df.columns:
+                # Use first non-null bol_gross_weight value (all items should have same BOL weight)
+                bol_weights = df['bol_gross_weight'].dropna()
+                if len(bol_weights) > 0:
+                    net_weight = float(bol_weights.iloc[0])
+                    self._queue_log(f"  Using BOL gross weight from CSV: {net_weight:.2f} kg")
+            # Otherwise try summing net_weight column
+            elif 'net_weight' in df.columns:
+                net_weight = df['net_weight'].sum()
+                self._queue_log(f"  Using net weight from CSV: {net_weight:.2f} kg")
 
             # Map OCRMill columns to invoice_processor expected columns
             column_mapping = {
@@ -1737,7 +2068,7 @@ To add a new template:
                     df = df.rename(columns={old_col: new_col})
 
             # Enrich data with parts database information (material percentages, HTS codes, etc.)
-            self._cbp_log(f"  Enriching data from parts database...")
+            self._queue_log(f"  Enriching data from parts database...")
             enriched_rows = []
             parts_found = 0
             parts_missing = 0
@@ -1782,31 +2113,31 @@ To add a new template:
                 enriched_rows.append(row)
 
             df = pd.DataFrame(enriched_rows)
-            self._cbp_log(f"  Parts in database: {parts_found}/{len(df)}")
+            self._queue_log(f"  Parts in database: {parts_found}/{len(df)}")
             if parts_missing > 0:
-                self._cbp_log(f"  WARNING: {parts_missing} parts not found in database (using defaults)")
+                self._queue_log(f"  WARNING: {parts_missing} parts not found in database (using defaults)")
 
             # Get MID from first row if available
             mid = df['mid'].iloc[0] if 'mid' in df.columns and len(df) > 0 else ""
 
             # Initialize processor - try database first, fall back to empty
-            db_path = DERIVATIVEMILL_PATH / "Resources" / "derivativemill.db"
+            db_path = Path(__file__).parent / "Resources" / "parts_database.db"
             if db_path.exists():
                 processor = InvoiceProcessor.from_database(str(db_path))
-                self._cbp_log(f"  Using tariff database: {db_path.name}")
+                self._queue_log(f"  Using tariff database: {db_path.name}")
             else:
                 processor = InvoiceProcessor.from_dict({})
-                self._cbp_log(f"  No tariff database found, using empty lookup")
+                self._queue_log(f"  No tariff database found, using empty lookup")
 
             # Process the invoice data
             result = processor.process(df, net_weight=net_weight, mid=mid)
 
-            self._cbp_log(f"  Original rows: {result.original_row_count}")
-            self._cbp_log(f"  Expanded rows: {result.expanded_row_count}")
-            self._cbp_log(f"  Total value: ${result.total_value:,.2f}")
+            self._queue_log(f"  Original rows: {result.original_row_count}")
+            self._queue_log(f"  Expanded rows: {result.expanded_row_count}")
+            self._queue_log(f"  Total value: ${result.total_value:,.2f}")
 
-            # Use user-selected output folder for split invoice files
-            output_folder = Path(self.cbp_output_var.get())
+            # Use config output folder for split invoice files
+            output_folder = Path(self.config.cbp_output_folder)
             output_folder.mkdir(parents=True, exist_ok=True)
 
             # Rename _232_flag to 232_Status for output
@@ -1829,7 +2160,7 @@ To add a new template:
             export_columns = [col for col in cbp_columns if col in result.data.columns]
 
             # Log what columns are being exported
-            self._cbp_log(f"  Exporting {len(export_columns)} columns: {', '.join(export_columns)}")
+            self._queue_log(f"  Exporting {len(export_columns)} columns: {', '.join(export_columns)}")
 
             # Split by invoice_number and export separate files
             if 'invoice_number' in result.data.columns:
@@ -1845,20 +2176,20 @@ To add a new template:
                     processor.export(invoice_df, str(output_path), columns=export_columns)
                     files_created.append(output_path.name)
 
-                self._cbp_log(f"  Split into {len(files_created)} invoice file(s):")
+                self._queue_log(f"  Split into {len(files_created)} invoice file(s):")
                 for filename in sorted(files_created):
-                    self._cbp_log(f"    - {filename}")
+                    self._queue_log(f"    - {filename}")
             else:
                 # Fallback to single file export if no invoice_number column
                 date_suffix = datetime.now().strftime("%Y%m%d")
                 output_path = output_folder / f"{csv_path.stem}_{date_suffix}.xlsx"
                 processor.export(result.data, str(output_path), columns=export_columns)
-                self._cbp_log(f"  Exported to: {output_path.name}")
+                self._queue_log(f"  Exported to: {output_path.name}")
 
-            self._cbp_log(f"  Success!")
+            self._queue_log(f"  Success!")
 
             # Move CSV to Processed subfolder
-            input_folder = Path(self.cbp_input_var.get())
+            input_folder = Path(self.config.cbp_input_folder)
             processed_folder = input_folder / "Processed"
             processed_folder.mkdir(parents=True, exist_ok=True)
 
@@ -1873,12 +2204,10 @@ To add a new template:
                     counter += 1
 
             csv_path.rename(dest_path)
-            self._cbp_log(f"  Moved CSV to: Processed/{dest_path.name}")
-
-            self._refresh_cbp_list()
+            self._queue_log(f"  Moved CSV to: Processed/{dest_path.name}")
 
         except Exception as e:
-            self._cbp_log(f"  ERROR: {e}")
+            self._queue_log(f"  ERROR: {e}")
             import traceback
             traceback.print_exc()
 
@@ -2152,6 +2481,102 @@ To add a new template:
         else:
             messagebox.showerror("Error", f"File not found:\n{file_path}")
 
+    def _delete_output_file(self):
+        """Delete the selected output file."""
+        selection = self.output_files_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("No Selection", "Please select a file to delete.")
+            return
+
+        rel_path = self.output_files_listbox.get(selection[0])
+        file_path = Path(self.config.output_folder) / rel_path
+
+        if file_path.exists():
+            if messagebox.askyesno("Confirm Delete", f"Delete file?\n\n{file_path.name}"):
+                try:
+                    file_path.unlink()
+                    self._queue_log(f"Deleted: {file_path.name}")
+                    self._refresh_output_files()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not delete file: {e}")
+        else:
+            messagebox.showerror("Error", f"File not found:\n{file_path}")
+
+    def _open_input_folder(self):
+        """Open the input folder in file explorer."""
+        input_folder = Path(self.config.input_folder)
+        if input_folder.exists():
+            try:
+                os.startfile(str(input_folder))
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open folder: {e}")
+        else:
+            messagebox.showwarning("Warning", f"Input folder does not exist:\n{input_folder}")
+
+    def _refresh_input_files(self):
+        """Refresh the list of pending input PDF files."""
+        self.input_files_listbox.delete(0, tk.END)
+        input_folder = Path(self.config.input_folder)
+
+        if input_folder.exists():
+            pdf_files = sorted(input_folder.glob("*.pdf"), key=lambda x: x.stat().st_mtime, reverse=True)
+            for pdf_file in pdf_files:
+                self.input_files_listbox.insert(tk.END, pdf_file.name)
+
+        # Update the path variable
+        if hasattr(self, 'input_files_path_var'):
+            self.input_files_path_var.set(str(self.config.input_folder))
+
+    def _delete_input_file(self):
+        """Delete the selected input PDF file."""
+        selection = self.input_files_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("No Selection", "Please select a file to delete.")
+            return
+
+        filename = self.input_files_listbox.get(selection[0])
+        file_path = Path(self.config.input_folder) / filename
+
+        if file_path.exists():
+            if messagebox.askyesno("Confirm Delete", f"Delete file?\n\n{file_path.name}"):
+                try:
+                    file_path.unlink()
+                    self._queue_log(f"Deleted input file: {file_path.name}")
+                    self._refresh_input_files()
+                    self._update_proc_statistics()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not delete file: {e}")
+        else:
+            messagebox.showerror("Error", f"File not found:\n{file_path}")
+
+    def _process_selected_input(self):
+        """Process the selected input PDF file."""
+        selection = self.input_files_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("No Selection", "Please select a file to process.")
+            return
+
+        filename = self.input_files_listbox.get(selection[0])
+        file_path = Path(self.config.input_folder) / filename
+
+        if file_path.exists():
+            self._queue_log(f"Processing: {filename}")
+            # Process in a thread to avoid blocking UI
+            threading.Thread(target=self._process_single_file, args=(file_path,), daemon=True).start()
+        else:
+            messagebox.showerror("Error", f"File not found:\n{file_path}")
+
+    def _process_single_file(self, file_path: Path):
+        """Process a single PDF file (runs in thread)."""
+        try:
+            output_folder = Path(self.config.output_folder)
+            self.engine.process_file(file_path, output_folder)
+            self.root.after(0, self._refresh_input_files)
+            self.root.after(0, self._refresh_output_files)
+            self.root.after(0, self._update_proc_statistics)
+        except Exception as e:
+            self._queue_log(f"Error processing {file_path.name}: {e}")
+
     def _save_settings(self):
         """Save current settings."""
         self.config.input_folder = self.input_var.get()
@@ -2304,9 +2729,6 @@ To add a new template:
                     self._queue_log(f"Auto CBP Export error for {csv_file.name}: {e}")
 
             self._queue_log(f"Auto CBP Export: Complete")
-
-            # Refresh CBP list if on that tab
-            self.root.after(0, self._refresh_cbp_list)
 
         except Exception as e:
             self._queue_log(f"Auto CBP Export error: {e}")
@@ -2887,11 +3309,15 @@ Last Updated:       {part.get('last_updated', 'N/A')}
 
     def _show_manufacturers_dialog(self):
         """Show the manufacturers/MID management dialog."""
-        ManufacturersDialog(self.root, self.db)
+        ManufacturersDialog(self.root, self.db, icon_path=self.icon_path if hasattr(self, 'icon_path') else None)
+
+    def _show_hts_reference_dialog(self):
+        """Show the HTS Reference database dialog."""
+        HTSReferenceDialog(self.root, icon_path=self.icon_path if hasattr(self, 'icon_path') else None)
 
     def _show_settings_dialog(self):
         """Show settings dialog."""
-        SettingsDialog(self.root, self.config, on_save=self._apply_column_visibility)
+        SettingsDialog(self.root, self.config, on_save=self._apply_column_visibility, icon_path=self.icon_path if hasattr(self, 'icon_path') else None)
 
     def _show_about(self):
         """Show about dialog."""
@@ -3105,10 +3531,6 @@ Last Updated:       {part.get('last_updated', 'N/A')}
         # Save window position/size
         self.config.set("window.width", self.root.winfo_width())
         self.config.set("window.height", self.root.winfo_height())
-
-        # Save CBP export settings (weight is not saved - auto-populated from CSV)
-        self.config.cbp_input_folder = self.cbp_input_var.get()
-        self.config.cbp_output_folder = self.cbp_output_var.get()
 
         self.root.destroy()
 
