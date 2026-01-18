@@ -32,6 +32,15 @@ a = Analysis(
 
         # Core modules
         ('core', 'core'),
+
+        # Licensing module
+        ('licensing', 'licensing'),
+
+        # Billing module
+        ('billing', 'billing'),
+
+        # Statistics module
+        ('statistics', 'statistics'),
     ],
     hiddenimports=[
         # PyQt6
@@ -91,6 +100,29 @@ a = Analysis(
         # Resources
         'Resources',
         'Resources.styles',
+
+        # Licensing modules
+        'licensing',
+        'licensing.license_manager',
+        'licensing.auth_manager',
+
+        # Billing modules
+        'billing',
+        'billing.billing_manager',
+        'billing.billing_sync',
+
+        # Statistics modules
+        'statistics',
+        'statistics.stats_tracker',
+
+        # AI Template Generator
+        'ai_template_generator',
+
+        # New dialogs
+        'ui.dialogs.license_dialog',
+        'ui.dialogs.login_dialog',
+        'ui.dialogs.billing_dialog',
+        'ui.dialogs.statistics_dialog',
     ],
     hookspath=[],
     hooksconfig={},
