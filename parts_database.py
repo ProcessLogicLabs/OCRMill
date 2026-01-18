@@ -128,7 +128,7 @@ class PartsDatabase:
             )
         """)
 
-        # Manufacturers/MID table
+        # Manufacturers/MID table (legacy)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS manufacturers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,11 +141,25 @@ class PartsDatabase:
             )
         """)
 
+        # MID table (TariffMill-compatible format)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS mid_table (
+                mid TEXT PRIMARY KEY,
+                manufacturer_name TEXT,
+                customer_id TEXT,
+                related_parties TEXT DEFAULT 'N',
+                created_date TEXT,
+                modified_date TEXT
+            )
+        """)
+
         # Create indexes for performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_part_occurrences_part ON part_occurrences(part_number)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_part_occurrences_invoice ON part_occurrences(invoice_number)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_part_occurrences_project ON part_occurrences(project_number)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_manufacturers_mid ON manufacturers(mid)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_mid_table_manufacturer ON mid_table(manufacturer_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_mid_table_customer ON mid_table(customer_id)")
 
         # App config table for licensing and settings
         cursor.execute("""
@@ -1282,6 +1296,248 @@ class PartsDatabase:
             return dict(candidates[0][1])
 
         return None
+
+    # ========== MID Table Methods (TariffMill-compatible) ==========
+
+    def get_all_mids(self) -> List[Dict]:
+        """Get all MIDs from mid_table, ordered by manufacturer name."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT manufacturer_name, mid, customer_id, related_parties
+            FROM mid_table
+            ORDER BY manufacturer_name, mid
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_mid_by_code(self, mid: str) -> Optional[Dict]:
+        """Get a single MID entry by its MID code."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM mid_table WHERE mid = ?", (mid,))
+        result = cursor.fetchone()
+        return dict(result) if result else None
+
+    def add_mid(self, mid: str, manufacturer_name: str = "", customer_id: str = "",
+                related_parties: str = "N") -> bool:
+        """Add a new MID entry. Returns True if successful."""
+        if not mid:
+            return False
+        try:
+            now = datetime.now().isoformat()
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO mid_table
+                (mid, manufacturer_name, customer_id, related_parties, created_date, modified_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (mid, manufacturer_name, customer_id, related_parties, now, now))
+            self.conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def update_mid(self, mid: str, manufacturer_name: str = "", customer_id: str = "",
+                   related_parties: str = "N") -> bool:
+        """Update an existing MID entry. Returns True if successful."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                UPDATE mid_table
+                SET manufacturer_name = ?, customer_id = ?, related_parties = ?, modified_date = ?
+                WHERE mid = ?
+            """, (manufacturer_name, customer_id, related_parties, datetime.now().isoformat(), mid))
+            self.conn.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            return False
+
+    def delete_mid(self, mid: str) -> bool:
+        """Delete a MID entry. Returns True if successful."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM mid_table WHERE mid = ?", (mid,))
+            self.conn.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            return False
+
+    def clear_all_mids(self) -> int:
+        """Delete all MIDs from mid_table. Returns count of deleted rows."""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM mid_table")
+        self.conn.commit()
+        return cursor.rowcount
+
+    def save_mids_batch(self, mids: List[Dict]) -> int:
+        """
+        Save a batch of MIDs, replacing all existing data.
+        Each dict should have: mid, manufacturer_name, customer_id, related_parties
+        Returns the number of records saved.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM mid_table")
+
+        saved = 0
+        now = datetime.now().isoformat()
+        for entry in mids:
+            mid = entry.get('mid', '').strip()
+            if not mid:
+                continue
+            cursor.execute("""
+                INSERT OR REPLACE INTO mid_table
+                (mid, manufacturer_name, customer_id, related_parties, created_date, modified_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                mid,
+                entry.get('manufacturer_name', '').strip(),
+                entry.get('customer_id', '').strip(),
+                entry.get('related_parties', 'N').strip().upper(),
+                now, now
+            ))
+            saved += 1
+
+        self.conn.commit()
+        return saved
+
+    def search_mids(self, customer_filter: str = "", mid_filter: str = "",
+                    manufacturer_filter: str = "") -> List[Dict]:
+        """Search MIDs with optional filters for customer ID, MID, and manufacturer."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT manufacturer_name, mid, customer_id, related_parties
+            FROM mid_table
+            ORDER BY manufacturer_name, mid
+        """)
+
+        results = []
+        customer_filter = customer_filter.upper()
+        mid_filter = mid_filter.upper()
+        manufacturer_filter = manufacturer_filter.upper()
+
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            manufacturer = (row_dict.get('manufacturer_name') or '').upper()
+            mid = (row_dict.get('mid') or '').upper()
+            customer_id = (row_dict.get('customer_id') or '').upper()
+
+            # Apply filters
+            if customer_filter and customer_filter not in customer_id:
+                continue
+            if mid_filter and mid_filter not in mid:
+                continue
+            if manufacturer_filter and manufacturer_filter not in manufacturer:
+                continue
+
+            results.append(row_dict)
+
+        return results
+
+    def import_mids_from_file(self, file_path: str, append_mode: bool = True) -> Tuple[int, int]:
+        """
+        Import MIDs from Excel/CSV file (TariffMill format).
+        Expected columns: Manufacturer Name, MID, Customer ID, Related Parties (Y/N)
+
+        Args:
+            file_path: Path to Excel or CSV file
+            append_mode: If True, append to existing; if False, replace all
+
+        Returns: (imported_count, skipped_count)
+        """
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError("pandas is required for file import")
+
+        # Read file
+        if file_path.lower().endswith('.csv'):
+            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+        else:
+            df = pd.read_excel(file_path, dtype=str, keep_default_na=False)
+
+        df = df.fillna("").rename(columns=str.strip)
+
+        # Map column names (case-insensitive)
+        col_map = {}
+        for col in df.columns:
+            col_lower = col.lower().replace('_', ' ').replace('-', ' ')
+            if 'manufacturer' in col_lower and 'name' in col_lower:
+                col_map[col] = 'manufacturer_name'
+            elif col_lower == 'mid' or col_lower == 'manufacturer id':
+                col_map[col] = 'mid'
+            elif 'customer' in col_lower and 'id' in col_lower:
+                col_map[col] = 'customer_id'
+            elif 'related' in col_lower or 'parties' in col_lower:
+                col_map[col] = 'related_parties'
+
+        df = df.rename(columns=col_map)
+
+        # Check for required MID column
+        if 'mid' not in df.columns:
+            raise ValueError("File must contain a 'MID' column.")
+
+        # Get existing MIDs if in append mode
+        existing_mids = set()
+        if append_mode:
+            for entry in self.get_all_mids():
+                existing_mids.add(entry.get('mid', '').strip().upper())
+        else:
+            self.clear_all_mids()
+
+        imported = 0
+        skipped = 0
+        now = datetime.now().isoformat()
+        cursor = self.conn.cursor()
+
+        for _, row in df.iterrows():
+            mid = str(row.get('mid', '')).strip()
+            if not mid:
+                continue
+
+            # Skip duplicates in append mode
+            if mid.upper() in existing_mids:
+                skipped += 1
+                continue
+
+            manufacturer_name = str(row.get('manufacturer_name', '')).strip()
+            customer_id = str(row.get('customer_id', '')).strip()
+            related_parties = str(row.get('related_parties', 'N')).strip().upper()
+            if related_parties not in ('Y', 'N'):
+                related_parties = 'N'
+
+            cursor.execute("""
+                INSERT OR REPLACE INTO mid_table
+                (mid, manufacturer_name, customer_id, related_parties, created_date, modified_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (mid, manufacturer_name, customer_id, related_parties, now, now))
+            imported += 1
+            existing_mids.add(mid.upper())
+
+        self.conn.commit()
+        return (imported, skipped)
+
+    def export_mids_to_excel(self, file_path: str) -> int:
+        """
+        Export all MIDs to Excel file.
+        Returns the number of records exported.
+        """
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError("pandas is required for Excel export")
+
+        mids = self.get_all_mids()
+        if not mids:
+            return 0
+
+        df = pd.DataFrame(mids)
+        # Rename columns to match TariffMill format
+        df = df.rename(columns={
+            'manufacturer_name': 'Manufacturer Name',
+            'mid': 'MID',
+            'customer_id': 'Customer ID',
+            'related_parties': 'Related Parties'
+        })
+
+        df.to_excel(file_path, index=False)
+        return len(mids)
 
     # ========== App Config Methods ==========
 

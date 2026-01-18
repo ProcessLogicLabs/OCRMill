@@ -24,6 +24,7 @@ from ui.tabs.invoice_tab import InvoiceProcessingTab
 from ui.tabs.parts_tab import PartsDatabaseTab
 from ui.dialogs.settings_dialog import SettingsDialog
 from ui.dialogs.manufacturers_dialog import ManufacturersDialog
+from ui.dialogs.mid_management_dialog import MIDManagementDialog
 from ui.dialogs.hts_reference_dialog import HTSReferenceDialog
 from ui.dialogs.login_dialog import LoginDialog
 from ui.dialogs.license_dialog import LicenseDialog, LicenseExpiredDialog
@@ -140,6 +141,12 @@ class OCRMillMainWindow(QMainWindow):
         preferences_action = QAction("&Preferences...", self)
         preferences_action.triggered.connect(self._show_settings_dialog)
         settings_menu.addAction(preferences_action)
+
+        settings_menu.addSeparator()
+
+        mid_management_action = QAction("&MID List Management...", self)
+        mid_management_action.triggered.connect(self._show_mid_management_dialog)
+        settings_menu.addAction(mid_management_action)
 
         settings_menu.addSeparator()
 
@@ -567,6 +574,12 @@ class OCRMillMainWindow(QMainWindow):
     def _show_manufacturers_dialog(self):
         """Show the manufacturers management dialog."""
         dialog = ManufacturersDialog(self.db, self)
+        dialog.exec()
+
+    @pyqtSlot()
+    def _show_mid_management_dialog(self):
+        """Show the MID Management dialog (TariffMill-compatible format)."""
+        dialog = MIDManagementDialog(self.db, self)
         dialog.exec()
 
     @pyqtSlot()
