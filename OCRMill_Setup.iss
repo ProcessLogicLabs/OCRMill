@@ -1,8 +1,8 @@
 ; OCRMill Inno Setup Script
-; Builds the installer for OCRMill v0.97.02
+; Builds the installer for OCRMill v0.97.03
 
 #define MyAppName "OCRMill"
-#define MyAppVersion "0.97.02"
+#define MyAppVersion "0.97.03"
 #define MyAppPublisher "Process Logic Labs, LLC"
 #define MyAppURL "https://github.com/ProcessLogicLabs/OCRMill"
 #define MyAppExeName "OCRMill.exe"

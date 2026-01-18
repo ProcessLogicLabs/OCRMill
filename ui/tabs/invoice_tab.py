@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (
     QPushButton, QLineEdit, QSpinBox, QCheckBox, QTabWidget,
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox,
     QFrame, QGridLayout, QSplitter, QRadioButton, QButtonGroup,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
+    QScrollArea
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer
 from PyQt6.QtGui import QColor
@@ -480,9 +481,16 @@ class InvoiceProcessingTab(QWidget):
 
     def _create_left_sidebar(self) -> QWidget:
         """Create the left sidebar with Controls (TariffMill style)."""
+        # Create scroll area to handle overflow
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setMinimumWidth(240)
+        scroll_area.setMaximumWidth(320)
+
+        # Content widget inside scroll area
         sidebar = QWidget()
-        sidebar.setMinimumWidth(240)
-        sidebar.setMaximumWidth(320)
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(0, 0, 5, 0)
         layout.setSpacing(6)
@@ -605,7 +613,9 @@ class InvoiceProcessingTab(QWidget):
 
         layout.addStretch()
 
-        return sidebar
+        # Set the sidebar as the scroll area's widget
+        scroll_area.setWidget(sidebar)
+        return scroll_area
 
     def _create_right_panel(self) -> QWidget:
         """Create the right panel with results preview and activity log."""
