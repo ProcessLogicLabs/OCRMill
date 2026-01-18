@@ -12,7 +12,22 @@
       <stop offset="0%" style="stop-color:#8b7bb5;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#6b5b95;stop-opacity:1" />
     </linearGradient>
+
+    <!-- Background gradient for visibility on dark taskbars -->
+    <radialGradient id="bgGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="85%" style="stop-color:#f0f0f0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e0e0;stop-opacity:1" />
+    </radialGradient>
+
+    <!-- Drop shadow filter for elevated effect -->
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
   </defs>
+
+  <!-- Light background circle with drop shadow for elevated effect on dark taskbars -->
+  <circle cx="64" cy="64" r="58" fill="url(#bgGradient)" stroke="#cccccc" stroke-width="1" filter="url(#dropShadow)"/>
 
   <!-- Outer ring of characters morphing to binary - arranged in a circle -->
   <g font-family="'Segoe UI', Arial, sans-serif" font-weight="bold">
