@@ -150,8 +150,8 @@ class OCRMillMainWindow(QMainWindow):
         # Master Data menu
         master_data_menu = menubar.addMenu("&Master Data")
 
-        import_action = QAction("&Import Parts List...", self)
-        import_action.triggered.connect(self._import_parts_list)
+        import_action = QAction("&Parts Import...", self)
+        import_action.triggered.connect(self._show_parts_import)
         master_data_menu.addAction(import_action)
 
         master_data_menu.addSeparator()
@@ -481,29 +481,16 @@ class OCRMillMainWindow(QMainWindow):
     # ----- Menu Actions -----
 
     @pyqtSlot()
-    def _import_parts_list(self):
-        """Import parts from Excel/CSV file."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Import Parts List",
-            "",
-            "Excel Files (*.xlsx *.xls);;CSV Files (*.csv);;All Files (*)"
-        )
-        if file_path:
-            try:
-                count = self.db.import_parts_list(file_path)
-                QMessageBox.information(
-                    self,
-                    "Import Complete",
-                    f"Successfully imported {count} parts."
-                )
-                self.parts_data_changed.emit()
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Import Error",
-                    f"Failed to import parts:\n{e}"
-                )
+    def _show_parts_import(self):
+        """Show the Parts Import tab for drag & drop column mapping."""
+        # Switch to Parts View tab
+        parts_tab_index = self.main_tabs.indexOf(self.parts_tab)
+        if parts_tab_index >= 0:
+            self.main_tabs.setCurrentIndex(parts_tab_index)
+
+        # Switch to Parts Import sub-tab (index 3)
+        if hasattr(self.parts_tab, 'sub_tabs'):
+            self.parts_tab.sub_tabs.setCurrentIndex(3)  # Parts Import is the 4th tab (index 3)
 
     @pyqtSlot()
     def _export_master(self):
