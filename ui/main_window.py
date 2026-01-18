@@ -29,7 +29,7 @@ from core.workers import ProcessingWorker, UpdateCheckWorker, UpdateDownloadWork
 
 
 # Application version
-VERSION = "0.97.01"
+VERSION = "0.97.02"
 
 
 class OCRMillMainWindow(QMainWindow):

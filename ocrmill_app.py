@@ -89,8 +89,8 @@ def main():
     splash.set_progress(100)
     app.processEvents()
 
-    # Small delay to show completion
-    QTimer.singleShot(300, lambda: _show_main_window(splash, window))
+    # Show splash screen for 2 seconds while spinner runs
+    QTimer.singleShot(2000, lambda: _show_main_window(splash, window))
 
     # Run event loop
     sys.exit(app.exec())
