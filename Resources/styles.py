@@ -245,6 +245,16 @@ QHeaderView::section {{
     font-family: 'Segoe UI', sans-serif;
 }}
 
+/* Scroll area */
+QScrollArea {{
+    background-color: transparent;
+    border: none;
+}}
+
+QScrollArea > QWidget > QWidget {{
+    background-color: transparent;
+}}
+
 /* List widget */
 QListWidget {{
     border: 1px solid {THEME['border']};
@@ -308,26 +318,32 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
 /* Menu bar */
 QMenuBar {{
     background-color: {THEME['surface']};
+    color: {THEME['text']};
     font-family: 'Segoe UI', sans-serif;
     border-bottom: 1px solid {THEME['border']};
 }}
 
 QMenuBar::item {{
     padding: 6px 12px;
+    background-color: transparent;
+    color: {THEME['text']};
 }}
 
 QMenuBar::item:selected {{
     background-color: {THEME['hover']};
+    color: {THEME['text']};
 }}
 
 QMenu {{
     background-color: {THEME['background']};
+    color: {THEME['text']};
     border: 1px solid {THEME['border']};
     font-family: 'Segoe UI', sans-serif;
 }}
 
 QMenu::item {{
     padding: 6px 40px 6px 20px;
+    color: {THEME['text']};
 }}
 
 QMenu::item:selected {{

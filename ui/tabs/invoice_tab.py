@@ -488,9 +488,16 @@ class InvoiceProcessingTab(QWidget):
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         scroll_area.setMinimumWidth(240)
         scroll_area.setMaximumWidth(320)
+        # Set object name for specific styling
+        scroll_area.setObjectName("sidebarScrollArea")
+        scroll_area.setStyleSheet("""
+            QScrollArea#sidebarScrollArea { background: transparent; border: none; }
+            QScrollArea#sidebarScrollArea > QWidget > QWidget { background: transparent; }
+        """)
 
         # Content widget inside scroll area
         sidebar = QWidget()
+        sidebar.setObjectName("sidebarContent")
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(0, 0, 5, 0)
         layout.setSpacing(6)

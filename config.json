@@ -6,6 +6,7 @@
   "auto_start": false,
   "consolidate_multi_invoice": true,
   "auto_cbp_export": false,
+  "check_updates_on_startup": true,
   "cbp_export": {
     "input_folder": "output/Processed",
     "output_folder": "output/CBP_Export"
@@ -20,7 +21,7 @@
   },
   "window": {
     "width": 1920,
-    "height": 926,
+    "height": 917,
     "x": 8,
     "y": 0
   },
