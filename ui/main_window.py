@@ -46,12 +46,12 @@ class OCRMillMainWindow(QMainWindow):
     processing_started = pyqtSignal()
     processing_stopped = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, config=None, db=None):
         super().__init__()
 
-        # Initialize core components
-        self.config = ConfigManager()
-        self.db = PartsDatabase(db_path=self.config.database_path)
+        # Initialize core components (use passed instances or create new)
+        self.config = config if config else ConfigManager()
+        self.db = db if db else PartsDatabase(db_path=self.config.database_path)
 
         # Processing state
         self.processing_worker = None
@@ -785,6 +785,21 @@ class OCRMillMainWindow(QMainWindow):
         self.invoice_tab.append_log(message)
 
     # ----- Event Handlers -----
+
+    def showEvent(self, event):
+        """Handle window show event - trigger initial layout refresh."""
+        super().showEvent(event)
+        # Delayed refresh to ensure all widgets are properly rendered
+        QTimer.singleShot(100, self._on_first_show)
+
+    def _on_first_show(self):
+        """Perform initialization after window is shown."""
+        # Update status bar
+        self._update_db_status()
+        # Force invoice tab to refresh its layout
+        if hasattr(self, 'invoice_tab'):
+            self.invoice_tab.updateGeometry()
+            self.invoice_tab.repaint()
 
     def closeEvent(self, event: QCloseEvent):
         """Handle window close event."""

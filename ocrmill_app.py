@@ -16,11 +16,10 @@ APP_DIR = Path(__file__).parent
 sys.path.insert(0, str(APP_DIR))
 
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 
 from Resources.styles import APP_STYLESHEET
-from ui.main_window import OCRMillMainWindow
 
 
 def main():
@@ -44,12 +43,64 @@ def main():
     # Apply global stylesheet
     app.setStyleSheet(APP_STYLESHEET)
 
-    # Create and show main window
-    window = OCRMillMainWindow()
-    window.show()
+    # Show splash screen during initialization
+    from ui.widgets.splash_screen import SpinningSplashScreen
+    splash = SpinningSplashScreen()
+    splash.center_on_screen()
+    splash.show()
+    splash.set_status("Starting OCRMill...")
+    splash.set_progress(10)
+    app.processEvents()
+
+    # Load configuration
+    splash.set_status("Loading configuration...")
+    splash.set_progress(25)
+    app.processEvents()
+
+    from config_manager import ConfigManager
+    config = ConfigManager()
+
+    # Initialize database
+    splash.set_status("Initializing database...")
+    splash.set_progress(45)
+    app.processEvents()
+
+    from parts_database import PartsDatabase
+    db = PartsDatabase(config.database_path)
+
+    # Load templates
+    splash.set_status("Loading invoice templates...")
+    splash.set_progress(65)
+    app.processEvents()
+
+    from templates import get_all_templates
+    get_all_templates()  # Pre-load templates
+
+    # Create main window
+    splash.set_status("Creating main window...")
+    splash.set_progress(85)
+    app.processEvents()
+
+    from ui.main_window import OCRMillMainWindow
+    window = OCRMillMainWindow(config=config, db=db)
+
+    # Finish loading
+    splash.set_status("Ready!")
+    splash.set_progress(100)
+    app.processEvents()
+
+    # Small delay to show completion
+    QTimer.singleShot(300, lambda: _show_main_window(splash, window))
 
     # Run event loop
     sys.exit(app.exec())
+
+
+def _show_main_window(splash, window):
+    """Close splash and show main window."""
+    splash.finish()
+    splash.close()
+    window.show()
 
 
 if __name__ == "__main__":

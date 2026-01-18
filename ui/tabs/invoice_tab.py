@@ -440,10 +440,29 @@ class InvoiceProcessingTab(QWidget):
         self.engine = ProcessorEngine(config, db, log_callback=self._log)
         self._is_processing = False
         self._last_results = []  # Store last processed results for preview
+        self._first_show = True  # Track first show for initialization
 
         self._setup_ui()
         self._connect_signals()
         self._load_config()
+
+    def showEvent(self, event):
+        """Handle first show to properly initialize layouts on Windows."""
+        super().showEvent(event)
+        if self._first_show:
+            self._first_show = False
+            # Delay the layout initialization to ensure proper rendering
+            QTimer.singleShot(50, self._on_first_show)
+
+    def _on_first_show(self):
+        """Initialize layout after first show."""
+        # Force splitter and table to update
+        if hasattr(self, 'right_splitter'):
+            self.right_splitter.setSizes([450, 150])
+        if hasattr(self, 'results_table'):
+            self._delayed_column_init()
+        self.updateGeometry()
+        self.repaint()
 
     def _setup_ui(self):
         """Set up the tab UI with TariffMill-style layout."""
@@ -462,10 +481,11 @@ class InvoiceProcessingTab(QWidget):
     def _create_left_sidebar(self) -> QWidget:
         """Create the left sidebar with Controls (TariffMill style)."""
         sidebar = QWidget()
+        sidebar.setMinimumWidth(240)
         sidebar.setMaximumWidth(320)
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(0, 0, 5, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         # Input Files (PDFs) group - also serves as drop zone
         input_group = QGroupBox("Input Files (PDFs) - Drop files here")
@@ -509,7 +529,8 @@ class InvoiceProcessingTab(QWidget):
         # Actions group
         actions_group = QGroupBox("Actions")
         actions_layout = QVBoxLayout(actions_group)
-        actions_layout.setSpacing(6)
+        actions_layout.setSpacing(4)
+        actions_layout.setContentsMargins(8, 12, 8, 8)
 
         # Start/Stop Monitoring button
         self.start_btn = QPushButton("Start Monitoring")
@@ -722,25 +743,25 @@ class InvoiceProcessingTab(QWidget):
         self.results_table.setColumnCount(len(default_columns))
         self.results_table.setHorizontalHeaderLabels(default_columns)
 
-        # Set column widths - set all to Interactive first, then set specific widths
+        # Set all columns to ResizeToContents initially for proper header display
         header = self.results_table.horizontalHeader()
-        for i in range(len(default_columns)):
+        header.setMinimumSectionSize(60)  # Ensure minimum readable width
+
+        # Set specific column widths
+        column_widths = [110, 180, 70, 85, 85, 75, 90]  # Part#, Desc, Qty, UnitP, Total, Inv#, Proj#
+
+        for i, width in enumerate(column_widths):
             header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+            self.results_table.setColumnWidth(i, width)
 
-        # Set initial column widths
-        self.results_table.setColumnWidth(0, 120)  # Part Number
-        self.results_table.setColumnWidth(1, 200)  # Description
-        self.results_table.setColumnWidth(2, 80)   # Quantity
-        self.results_table.setColumnWidth(3, 90)   # Unit Price
-        self.results_table.setColumnWidth(4, 90)   # Total
-        self.results_table.setColumnWidth(5, 80)   # Invoice #
-        self.results_table.setColumnWidth(6, 100)  # Project #
-
-        # Set Description to stretch after initial widths are set
+        # Make Description column stretch to fill available space
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
-        # Force header repaint to fix rendering issues on Windows
-        QTimer.singleShot(0, self._force_header_repaint)
+        # Ensure horizontal scrollbar is available if needed
+        self.results_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        # Schedule delayed initialization for Windows rendering fix
+        QTimer.singleShot(100, self._delayed_column_init)
 
     def _force_header_repaint(self):
         """Force the table header to repaint properly."""
@@ -748,6 +769,31 @@ class InvoiceProcessingTab(QWidget):
         header.updateGeometry()
         header.repaint()
         self.results_table.viewport().update()
+
+    def _delayed_column_init(self):
+        """Delayed column initialization for Windows rendering fix."""
+        if not hasattr(self, 'results_table'):
+            return
+
+        # Re-apply column widths after widget is fully initialized
+        column_widths = [110, 180, 70, 85, 85, 75, 90]
+        for i, width in enumerate(column_widths):
+            if i < self.results_table.columnCount():
+                self.results_table.setColumnWidth(i, width)
+
+        # Force header and table update
+        header = self.results_table.horizontalHeader()
+        header.updateGeometry()
+
+        # Ensure Description column stretches
+        if self.results_table.columnCount() > 1:
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        self.results_table.updateGeometry()
+        self.results_table.repaint()
+
+        if self.results_table.viewport():
+            self.results_table.viewport().update()
 
     def _update_results_table(self, items: list):
         """Update the results table with extracted items (dynamic columns)."""
