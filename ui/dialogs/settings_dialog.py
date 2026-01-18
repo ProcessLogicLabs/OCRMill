@@ -7,12 +7,14 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QGroupBox, QFormLayout, QCheckBox, QPushButton, QLabel,
-    QSpinBox, QLineEdit, QFileDialog, QScrollArea, QFrame
+    QSpinBox, QLineEdit, QFileDialog, QScrollArea, QFrame,
+    QComboBox, QApplication
 )
 from PyQt6.QtCore import Qt
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config_manager import ConfigManager
+from core.theme_manager import get_theme_manager, AVAILABLE_THEMES
 
 
 class SettingsDialog(QDialog):
@@ -22,9 +24,10 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.config = config
         self._changes_made = False
+        self.theme_manager = get_theme_manager()
 
         self.setWindowTitle("Settings")
-        self.setMinimumSize(500, 500)
+        self.setMinimumSize(500, 550)
         self.setModal(True)
 
         self._setup_ui()
@@ -40,6 +43,10 @@ class SettingsDialog(QDialog):
         # General tab
         general_tab = self._create_general_tab()
         self.tabs.addTab(general_tab, "General")
+
+        # Appearance tab
+        appearance_tab = self._create_appearance_tab()
+        self.tabs.addTab(appearance_tab, "Appearance")
 
         # Processing tab
         processing_tab = self._create_processing_tab()
@@ -130,6 +137,52 @@ class SettingsDialog(QDialog):
         layout.addStretch()
 
         return widget
+
+    def _create_appearance_tab(self) -> QWidget:
+        """Create the appearance/theme settings tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        # Theme selection group
+        theme_group = QGroupBox("Application Theme")
+        theme_layout = QFormLayout(theme_group)
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(AVAILABLE_THEMES)
+        self.theme_combo.currentTextChanged.connect(self._preview_theme)
+        theme_layout.addRow("Theme:", self.theme_combo)
+
+        # Theme descriptions
+        desc_label = QLabel(
+            "<b>Available Themes:</b><br>"
+            "<b>Muted Cyan</b> - Default OCRMill theme (light)<br>"
+            "<b>Fusion (Light)</b> - Standard light theme<br>"
+            "<b>Fusion (Dark)</b> - Dark mode for low-light environments<br>"
+            "<b>Ocean</b> - Deep blue theme for dark mode<br>"
+            "<b>System Default</b> - Follow system settings"
+        )
+        desc_label.setStyleSheet("color: gray; font-size: 9pt; padding: 10px;")
+        desc_label.setWordWrap(True)
+        theme_layout.addRow("", desc_label)
+
+        layout.addWidget(theme_group)
+
+        # Preview note
+        preview_note = QLabel(
+            "Theme changes are applied immediately for preview.\n"
+            "Click Save to keep the selected theme, or Cancel to revert."
+        )
+        preview_note.setStyleSheet("color: #666; font-style: italic; padding: 10px;")
+        preview_note.setWordWrap(True)
+        layout.addWidget(preview_note)
+
+        layout.addStretch()
+
+        return widget
+
+    def _preview_theme(self, theme_name: str):
+        """Preview the selected theme immediately."""
+        self.theme_manager.apply_theme(theme_name)
 
     def _create_processing_tab(self) -> QWidget:
         """Create the processing settings tab."""
@@ -285,6 +338,12 @@ class SettingsDialog(QDialog):
         self.poll_spinbox.setValue(self.config.poll_interval)
         self.auto_start_check.setChecked(self.config.auto_start)
 
+        # Appearance - load saved theme
+        self._original_theme = self.theme_manager.load_saved_theme()
+        index = self.theme_combo.findText(self._original_theme)
+        if index >= 0:
+            self.theme_combo.setCurrentIndex(index)
+
         # Processing
         self.consolidate_check.setChecked(self.config.consolidate_multi_invoice)
 
@@ -363,3 +422,12 @@ class SettingsDialog(QDialog):
     def _select_no_columns(self):
         for check in self.column_checks.values():
             check.setChecked(False)
+
+    def reject(self):
+        """Handle dialog cancel - revert theme if changed."""
+        if hasattr(self, '_original_theme'):
+            current_theme = self.theme_combo.currentText()
+            if current_theme != self._original_theme:
+                # Revert to original theme
+                self.theme_manager.apply_theme(self._original_theme)
+        super().reject()

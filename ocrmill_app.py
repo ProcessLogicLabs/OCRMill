@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 
-from Resources.styles import APP_STYLESHEET
+from core.theme_manager import get_theme_manager
 
 
 def main():
@@ -40,8 +40,10 @@ def main():
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
-    # Apply global stylesheet
-    app.setStyleSheet(APP_STYLESHEET)
+    # Apply saved theme (uses theme manager for comprehensive styling)
+    theme_manager = get_theme_manager()
+    saved_theme = theme_manager.load_saved_theme()
+    theme_manager.apply_theme(saved_theme)
 
     # Show splash screen during initialization
     from ui.widgets.splash_screen import SpinningSplashScreen
@@ -92,7 +94,7 @@ def main():
 
     from statistics.stats_tracker import StatisticsTracker, EventTypes
     stats_tracker = StatisticsTracker(db)
-    stats_tracker.track_event(EventTypes.APP_STARTED, {'version': '0.97.04'})
+    stats_tracker.track_event(EventTypes.APP_STARTED, {'version': '0.98.00'})
 
     # Create main window
     splash.set_status("Creating main window...")

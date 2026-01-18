@@ -8,6 +8,11 @@ from .workers import (
     ImportWorker,
     ExportWorker
 )
+from .theme_manager import (
+    ThemeManager,
+    get_theme_manager,
+    AVAILABLE_THEMES
+)
 
 __all__ = [
     'SignalLogHandler',
@@ -16,5 +21,8 @@ __all__ = [
     'CBPExportWorker',
     'UpdateCheckWorker',
     'ImportWorker',
-    'ExportWorker'
+    'ExportWorker',
+    'ThemeManager',
+    'get_theme_manager',
+    'AVAILABLE_THEMES'
 ]
