@@ -60,6 +60,19 @@ DEFAULT_CONFIG = {
         "fsc_certified": True,
         "fsc_certificate_code": True,
         "last_updated": True
+    },
+    "licensing": {
+        "require_login": False,
+        "allow_skip_login": True
+    },
+    "billing": {
+        "enabled": True,
+        "remote_sync_enabled": False,
+        "config_repo_path": None
+    },
+    "auth": {
+        "allowed_domains": [],
+        "auto_windows_login": True
     }
 }
 
@@ -289,3 +302,90 @@ class ConfigManager:
     def get_all_column_settings(self) -> Dict[str, bool]:
         """Get all column visibility settings."""
         return self.config.get("parts_master_columns", {}).copy()
+
+    # Licensing settings
+    @property
+    def require_login(self) -> bool:
+        """Check if login is required at startup."""
+        return self.config.get("licensing", {}).get("require_login", False)
+
+    @require_login.setter
+    def require_login(self, value: bool):
+        if "licensing" not in self.config:
+            self.config["licensing"] = {}
+        self.config["licensing"]["require_login"] = value
+        self.save()
+
+    @property
+    def allow_skip_login(self) -> bool:
+        """Check if users can skip login."""
+        return self.config.get("licensing", {}).get("allow_skip_login", True)
+
+    @allow_skip_login.setter
+    def allow_skip_login(self, value: bool):
+        if "licensing" not in self.config:
+            self.config["licensing"] = {}
+        self.config["licensing"]["allow_skip_login"] = value
+        self.save()
+
+    # Billing settings
+    @property
+    def billing_enabled(self) -> bool:
+        """Check if billing tracking is enabled."""
+        return self.config.get("billing", {}).get("enabled", True)
+
+    @billing_enabled.setter
+    def billing_enabled(self, value: bool):
+        if "billing" not in self.config:
+            self.config["billing"] = {}
+        self.config["billing"]["enabled"] = value
+        self.save()
+
+    @property
+    def billing_sync_enabled(self) -> bool:
+        """Check if remote billing sync is enabled."""
+        return self.config.get("billing", {}).get("remote_sync_enabled", False)
+
+    @billing_sync_enabled.setter
+    def billing_sync_enabled(self, value: bool):
+        if "billing" not in self.config:
+            self.config["billing"] = {}
+        self.config["billing"]["remote_sync_enabled"] = value
+        self.save()
+
+    @property
+    def billing_repo_path(self) -> str:
+        """Get the billing config repository path."""
+        return self.config.get("billing", {}).get("config_repo_path")
+
+    @billing_repo_path.setter
+    def billing_repo_path(self, value: str):
+        if "billing" not in self.config:
+            self.config["billing"] = {}
+        self.config["billing"]["config_repo_path"] = value
+        self.save()
+
+    # Auth settings
+    @property
+    def allowed_domains(self) -> List[str]:
+        """Get list of allowed Windows domains for auto-login."""
+        return self.config.get("auth", {}).get("allowed_domains", [])
+
+    @allowed_domains.setter
+    def allowed_domains(self, value: List[str]):
+        if "auth" not in self.config:
+            self.config["auth"] = {}
+        self.config["auth"]["allowed_domains"] = value
+        self.save()
+
+    @property
+    def auto_windows_login(self) -> bool:
+        """Check if automatic Windows login is enabled."""
+        return self.config.get("auth", {}).get("auto_windows_login", True)
+
+    @auto_windows_login.setter
+    def auto_windows_login(self, value: bool):
+        if "auth" not in self.config:
+            self.config["auth"] = {}
+        self.config["auth"]["auto_windows_login"] = value
+        self.save()

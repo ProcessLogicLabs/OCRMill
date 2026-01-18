@@ -43,5 +43,18 @@
     "fsc_certified": true,
     "fsc_certificate_code": true,
     "last_updated": true
+  },
+  "licensing": {
+    "require_login": false,
+    "allow_skip_login": true
+  },
+  "billing": {
+    "enabled": true,
+    "remote_sync_enabled": false,
+    "config_repo_path": null
+  },
+  "auth": {
+    "allowed_domains": [],
+    "auto_windows_login": true
   }
 }

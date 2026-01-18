@@ -25,7 +25,13 @@ from ui.tabs.parts_tab import PartsDatabaseTab
 from ui.dialogs.settings_dialog import SettingsDialog
 from ui.dialogs.manufacturers_dialog import ManufacturersDialog
 from ui.dialogs.hts_reference_dialog import HTSReferenceDialog
+from ui.dialogs.login_dialog import LoginDialog
+from ui.dialogs.license_dialog import LicenseDialog, LicenseExpiredDialog
+from ui.dialogs.billing_dialog import BillingDialog
+from ui.dialogs.statistics_dialog import StatisticsDialog
 from core.workers import ProcessingWorker, UpdateCheckWorker, UpdateDownloadWorker
+from licensing.license_manager import LicenseManager
+from licensing.auth_manager import AuthenticationManager
 
 
 # Application version
@@ -53,6 +59,11 @@ class OCRMillMainWindow(QMainWindow):
         self.config = config if config else ConfigManager()
         self.db = db if db else PartsDatabase(db_path=self.config.database_path)
 
+        # Licensing and auth managers
+        self.license_manager = LicenseManager(self.db)
+        self.auth_manager = AuthenticationManager(self.db)
+        self.current_user = None
+
         # Processing state
         self.processing_worker = None
         self.is_processing = False
@@ -76,13 +87,15 @@ class OCRMillMainWindow(QMainWindow):
 
     def _setup_window(self):
         """Configure window properties."""
-        self.setWindowTitle(f"OCRMill v{VERSION}")
         self.setMinimumSize(900, 600)
 
         # Set window icon if available
         icon_path = Path(__file__).parent.parent / "Resources" / "icon.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
+
+        # Set window title with license status
+        self._update_window_title()
 
     def _create_menu_bar(self):
         """Create the menu bar with all menus (TariffMill style)."""
@@ -166,6 +179,51 @@ class OCRMillMainWindow(QMainWindow):
         hts_action = QAction("&HTS Reference...", self)
         hts_action.triggered.connect(self._show_hts_reference_dialog)
         references_menu.addAction(hts_action)
+
+        # Templates menu
+        templates_menu = menubar.addMenu("&Templates")
+
+        ai_generator_action = QAction("&AI Template Generator...", self)
+        ai_generator_action.triggered.connect(self._show_ai_template_generator)
+        templates_menu.addAction(ai_generator_action)
+
+        templates_menu.addSeparator()
+
+        refresh_templates_action = QAction("&Refresh Templates", self)
+        refresh_templates_action.triggered.connect(self._refresh_templates)
+        templates_menu.addAction(refresh_templates_action)
+
+        manage_templates_action = QAction("&Manage Templates...", self)
+        manage_templates_action.triggered.connect(self._show_template_manager)
+        templates_menu.addAction(manage_templates_action)
+
+        # Licensing menu
+        licensing_menu = menubar.addMenu("&Licensing")
+
+        license_info_action = QAction("License &Information...", self)
+        license_info_action.triggered.connect(self._show_license_dialog)
+        licensing_menu.addAction(license_info_action)
+
+        licensing_menu.addSeparator()
+
+        self.login_action = QAction("&Login...", self)
+        self.login_action.triggered.connect(self._show_login_dialog)
+        licensing_menu.addAction(self.login_action)
+
+        self.logout_action = QAction("Log&out", self)
+        self.logout_action.triggered.connect(self._logout)
+        self.logout_action.setEnabled(False)
+        licensing_menu.addAction(self.logout_action)
+
+        licensing_menu.addSeparator()
+
+        billing_action = QAction("&Billing Records...", self)
+        billing_action.triggered.connect(self._show_billing_dialog)
+        licensing_menu.addAction(billing_action)
+
+        statistics_action = QAction("&Statistics...", self)
+        statistics_action.triggered.connect(self._show_statistics_dialog)
+        licensing_menu.addAction(statistics_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -251,6 +309,17 @@ class OCRMillMainWindow(QMainWindow):
 
         # Spacer
         self.status_bar.addWidget(QLabel(), 1)
+
+        # User info
+        self.user_status = QLabel("Not logged in")
+        self.user_status.setStyleSheet("color: #666;")
+        self.status_bar.addPermanentWidget(self.user_status)
+
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setStyleSheet("color: #ccc;")
+        self.status_bar.addPermanentWidget(sep)
 
         # Processing status
         self.processing_status = QLabel("Monitoring: Stopped")
@@ -494,6 +563,139 @@ class OCRMillMainWindow(QMainWindow):
         dialog = HTSReferenceDialog(self.db, self)
         if dialog.exec():
             self.parts_data_changed.emit()
+
+    @pyqtSlot()
+    def _show_ai_template_generator(self):
+        """Show the AI template generator dialog."""
+        from ai_template_generator import AITemplateGeneratorDialog
+        dialog = AITemplateGeneratorDialog(self, db=self.db)
+        dialog.template_created.connect(self._on_template_created)
+        dialog.exec()
+
+    @pyqtSlot(str, str)
+    def _on_template_created(self, template_name: str, file_path: str):
+        """Handle when a new template is created."""
+        self._refresh_templates()
+        self.status_label.setText(f"Template '{template_name}' created successfully")
+
+    @pyqtSlot()
+    def _refresh_templates(self):
+        """Refresh the template registry."""
+        from templates import refresh_templates
+        refresh_templates()
+        self.status_label.setText("Templates refreshed")
+
+    @pyqtSlot()
+    def _show_template_manager(self):
+        """Show the template manager dialog (lists available templates)."""
+        from templates import get_all_templates
+        templates = get_all_templates()
+
+        # Simple dialog showing available templates
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Template Manager")
+        dialog.setMinimumSize(500, 400)
+
+        layout = QVBoxLayout(dialog)
+
+        layout.addWidget(QLabel("Available Templates:"))
+
+        text_edit = QPlainTextEdit()
+        text_edit.setReadOnly(True)
+
+        template_info = []
+        for name, template in templates.items():
+            enabled = "Enabled" if template.enabled else "Disabled"
+            template_info.append(f"{name}:")
+            template_info.append(f"  Name: {template.name}")
+            template_info.append(f"  Description: {template.description}")
+            template_info.append(f"  Client: {template.client}")
+            template_info.append(f"  Version: {template.version}")
+            template_info.append(f"  Status: {enabled}")
+            template_info.append("")
+
+        if not template_info:
+            template_info = ["No templates found."]
+
+        text_edit.setPlainText("\n".join(template_info))
+        layout.addWidget(text_edit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+
+        dialog.exec()
+
+    @pyqtSlot()
+    def _show_license_dialog(self):
+        """Show the license information dialog."""
+        dialog = LicenseDialog(self.db, self)
+        dialog.exec()
+        self._update_window_title()
+
+    @pyqtSlot()
+    def _show_login_dialog(self):
+        """Show the login dialog."""
+        dialog = LoginDialog(self.db, self, allow_skip=True)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            user_info = dialog.get_authenticated_user()
+            if user_info:
+                self.current_user = user_info
+                self._update_user_status()
+
+    @pyqtSlot()
+    def _logout(self):
+        """Log out the current user."""
+        self.auth_manager.logout()
+        self.current_user = None
+        self._update_user_status()
+        self.status_label.setText("Logged out")
+
+    @pyqtSlot()
+    def _show_billing_dialog(self):
+        """Show the billing records dialog."""
+        is_admin = self.auth_manager.is_admin() if self.current_user else False
+        dialog = BillingDialog(self.db, self, is_admin=is_admin)
+        dialog.exec()
+
+    @pyqtSlot()
+    def _show_statistics_dialog(self):
+        """Show the statistics dialog."""
+        dialog = StatisticsDialog(self.db, self)
+        dialog.exec()
+
+    def _update_user_status(self):
+        """Update the user status display in status bar and menus."""
+        if self.current_user and self.current_user.get('is_authenticated'):
+            name = self.current_user.get('name') or self.current_user.get('email', 'User')
+            role = self.current_user.get('role', '')
+            if role == 'admin':
+                self.user_status.setText(f"{name} (Admin)")
+                self.user_status.setStyleSheet("color: #5f9ea0; font-weight: bold;")
+            else:
+                self.user_status.setText(name)
+                self.user_status.setStyleSheet("color: #333;")
+            self.login_action.setEnabled(False)
+            self.logout_action.setEnabled(True)
+        else:
+            self.user_status.setText("Not logged in")
+            self.user_status.setStyleSheet("color: #666;")
+            self.login_action.setEnabled(True)
+            self.logout_action.setEnabled(False)
+
+    def _update_window_title(self):
+        """Update window title with license status."""
+        status, days = self.license_manager.get_license_status()
+        if status == 'active':
+            title_suffix = "(Licensed)"
+        elif status == 'trial':
+            title_suffix = f"(Trial - {days} days left)"
+        elif status == 'expired':
+            title_suffix = "(Trial Expired)"
+        else:
+            title_suffix = ""
+
+        self.setWindowTitle(f"OCRMill v{VERSION} {title_suffix}".strip())
 
     @pyqtSlot()
     def _show_settings_dialog(self):

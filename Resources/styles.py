@@ -419,6 +419,29 @@ QToolButton:hover {{
 QToolButton:pressed {{
     background-color: {THEME['primary_light']};
 }}
+
+/* Splitter - remove black line */
+QSplitter {{
+    background-color: transparent;
+}}
+
+QSplitter::handle {{
+    background-color: {THEME['border_light']};
+}}
+
+QSplitter::handle:vertical {{
+    height: 3px;
+    margin: 2px 0;
+}}
+
+QSplitter::handle:horizontal {{
+    width: 3px;
+    margin: 0 2px;
+}}
+
+QSplitter::handle:hover {{
+    background-color: {THEME['primary_light']};
+}}
 """
 
 # HTS Reference Dialog stylesheet (matches TariffMill theme)

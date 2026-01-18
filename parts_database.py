@@ -147,6 +147,83 @@ class PartsDatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_part_occurrences_project ON part_occurrences(project_number)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_manufacturers_mid ON manufacturers(mid)")
 
+        # App config table for licensing and settings
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_config (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                modified_date TEXT
+            )
+        """)
+
+        # Billing records table (matches TariffMill schema)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS billing_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_number TEXT,
+                export_date TEXT,
+                export_time TEXT,
+                file_name TEXT,
+                line_count INTEGER,
+                total_value REAL,
+                hts_codes_used TEXT,
+                user_name TEXT,
+                machine_id TEXT,
+                processing_time_ms INTEGER,
+                invoice_sent INTEGER DEFAULT 0,
+                invoice_month TEXT,
+                created_date TEXT
+            )
+        """)
+
+        # Usage statistics table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usage_statistics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT,
+                event_data TEXT,
+                user_name TEXT,
+                timestamp TEXT
+            )
+        """)
+
+        # Export audit log table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS export_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT,
+                event_date TEXT,
+                event_time TEXT,
+                file_number TEXT,
+                user_name TEXT,
+                machine_id TEXT,
+                success INTEGER,
+                failure_reason TEXT,
+                billing_recorded INTEGER DEFAULT 0
+            )
+        """)
+
+        # Billing duplicate attempts tracking
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS billing_duplicate_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_number TEXT,
+                original_export_date TEXT,
+                attempt_date TEXT,
+                days_since_original INTEGER,
+                user_name TEXT,
+                machine_id TEXT
+            )
+        """)
+
+        # Create indexes for billing/stats tables
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_file_number ON billing_records(file_number)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_export_date ON billing_records(export_date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_invoice_month ON billing_records(invoice_month)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_usage_stats_event_type ON usage_statistics(event_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_usage_stats_timestamp ON usage_statistics(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_file_number ON export_audit_log(file_number)")
+
         self.conn.commit()
 
     def add_part_occurrence(self, part_data: Dict) -> bool:
@@ -1205,6 +1282,205 @@ class PartsDatabase:
             return dict(candidates[0][1])
 
         return None
+
+    # ========== App Config Methods ==========
+
+    def get_app_config(self, key: str, default: str = None) -> Optional[str]:
+        """Get a configuration value from app_config table."""
+        cursor = self.conn.execute(
+            "SELECT value FROM app_config WHERE key = ?",
+            (key,)
+        )
+        row = cursor.fetchone()
+        return row['value'] if row else default
+
+    def set_app_config(self, key: str, value: str) -> None:
+        """Set a configuration value in app_config table."""
+        from datetime import datetime
+        self.conn.execute(
+            """INSERT OR REPLACE INTO app_config (key, value, modified_date)
+               VALUES (?, ?, ?)""",
+            (key, value, datetime.now().isoformat())
+        )
+        self.conn.commit()
+
+    def delete_app_config(self, key: str) -> None:
+        """Delete a configuration value from app_config table."""
+        self.conn.execute("DELETE FROM app_config WHERE key = ?", (key,))
+        self.conn.commit()
+
+    # ========== Billing Records Methods ==========
+
+    def add_billing_record(self, file_number: str, file_name: str, line_count: int,
+                          total_value: float, hts_codes_used: str, user_name: str,
+                          machine_id: str, processing_time_ms: int) -> int:
+        """Add a billing record. Returns the record ID."""
+        from datetime import datetime
+        now = datetime.now()
+        cursor = self.conn.execute(
+            """INSERT INTO billing_records
+               (file_number, export_date, export_time, file_name, line_count,
+                total_value, hts_codes_used, user_name, machine_id,
+                processing_time_ms, invoice_sent, invoice_month, created_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)""",
+            (file_number, now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'),
+             file_name, line_count, total_value, hts_codes_used, user_name,
+             machine_id, processing_time_ms, now.strftime('%Y-%m'), now.isoformat())
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def is_file_already_billed(self, file_number: str) -> bool:
+        """Check if a file number has already been billed."""
+        cursor = self.conn.execute(
+            "SELECT COUNT(*) as count FROM billing_records WHERE file_number = ?",
+            (file_number,)
+        )
+        return cursor.fetchone()['count'] > 0
+
+    def record_duplicate_attempt(self, file_number: str, user_name: str, machine_id: str) -> None:
+        """Record an attempt to bill a duplicate file number."""
+        from datetime import datetime
+        now = datetime.now()
+        self.conn.execute(
+            """INSERT INTO billing_duplicate_attempts
+               (file_number, attempt_date, attempt_time, user_name, machine_id)
+               VALUES (?, ?, ?, ?, ?)""",
+            (file_number, now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'),
+             user_name, machine_id)
+        )
+        self.conn.commit()
+
+    def get_billing_records(self, start_date: str = None, end_date: str = None,
+                           invoice_month: str = None) -> List[Dict]:
+        """Get billing records with optional date filtering."""
+        query = "SELECT * FROM billing_records WHERE 1=1"
+        params = []
+
+        if start_date:
+            query += " AND export_date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND export_date <= ?"
+            params.append(end_date)
+        if invoice_month:
+            query += " AND invoice_month = ?"
+            params.append(invoice_month)
+
+        query += " ORDER BY export_date DESC, export_time DESC"
+        cursor = self.conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_monthly_billing_summary(self, year: int, month: int) -> Dict:
+        """Get billing summary for a specific month."""
+        invoice_month = f"{year:04d}-{month:02d}"
+        cursor = self.conn.execute(
+            """SELECT
+                COUNT(*) as total_files,
+                SUM(line_count) as total_lines,
+                SUM(total_value) as total_value,
+                COUNT(DISTINCT user_name) as unique_users
+               FROM billing_records
+               WHERE invoice_month = ?""",
+            (invoice_month,)
+        )
+        row = cursor.fetchone()
+        return {
+            'invoice_month': invoice_month,
+            'total_files': row['total_files'] or 0,
+            'total_lines': row['total_lines'] or 0,
+            'total_value': row['total_value'] or 0.0,
+            'unique_users': row['unique_users'] or 0
+        }
+
+    def mark_invoiced(self, invoice_month: str) -> int:
+        """Mark all records for a month as invoiced. Returns count updated."""
+        cursor = self.conn.execute(
+            """UPDATE billing_records SET invoice_sent = 1
+               WHERE invoice_month = ? AND invoice_sent = 0""",
+            (invoice_month,)
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
+    # ========== Usage Statistics Methods ==========
+
+    def track_event(self, event_type: str, event_data: str, user_name: str = None) -> None:
+        """Track a usage event."""
+        from datetime import datetime
+        self.conn.execute(
+            """INSERT INTO usage_statistics (event_type, event_data, user_name, timestamp)
+               VALUES (?, ?, ?, ?)""",
+            (event_type, event_data, user_name, datetime.now().isoformat())
+        )
+        self.conn.commit()
+
+    def get_usage_statistics(self, event_type: str = None, days: int = 30) -> List[Dict]:
+        """Get usage statistics with optional filtering."""
+        from datetime import datetime, timedelta
+        cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+
+        query = "SELECT * FROM usage_statistics WHERE timestamp >= ?"
+        params = [cutoff_date]
+
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+
+        query += " ORDER BY timestamp DESC"
+        cursor = self.conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_event_counts(self, days: int = 30) -> Dict[str, int]:
+        """Get counts by event type for the specified period."""
+        from datetime import datetime, timedelta
+        cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+
+        cursor = self.conn.execute(
+            """SELECT event_type, COUNT(*) as count
+               FROM usage_statistics
+               WHERE timestamp >= ?
+               GROUP BY event_type""",
+            (cutoff_date,)
+        )
+        return {row['event_type']: row['count'] for row in cursor.fetchall()}
+
+    # ========== Export Audit Log Methods ==========
+
+    def log_export_event(self, event_type: str, file_number: str, user_name: str,
+                        machine_id: str, success: bool, failure_reason: str = None) -> None:
+        """Log an export event to the audit log."""
+        from datetime import datetime
+        now = datetime.now()
+        self.conn.execute(
+            """INSERT INTO export_audit_log
+               (event_type, event_date, event_time, file_number, user_name,
+                machine_id, success, failure_reason)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (event_type, now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'),
+             file_number, user_name, machine_id, 1 if success else 0, failure_reason)
+        )
+        self.conn.commit()
+
+    def get_audit_log(self, start_date: str = None, end_date: str = None,
+                     event_type: str = None) -> List[Dict]:
+        """Get export audit log with optional filtering."""
+        query = "SELECT * FROM export_audit_log WHERE 1=1"
+        params = []
+
+        if start_date:
+            query += " AND event_date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND event_date <= ?"
+            params.append(end_date)
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+
+        query += " ORDER BY event_date DESC, event_time DESC"
+        cursor = self.conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
         """Close database connection."""
