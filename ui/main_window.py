@@ -709,18 +709,8 @@ class OCRMillMainWindow(QMainWindow):
             self.logout_action.setEnabled(False)
 
     def _update_window_title(self):
-        """Update window title with license status."""
-        status, days = self.license_manager.get_license_status()
-        if status == 'active':
-            title_suffix = "(Licensed)"
-        elif status == 'trial':
-            title_suffix = f"(Trial - {days} days left)"
-        elif status == 'expired':
-            title_suffix = "(Trial Expired)"
-        else:
-            title_suffix = ""
-
-        self.setWindowTitle(f"OCRMill v{VERSION} {title_suffix}".strip())
+        """Update window title."""
+        self.setWindowTitle(f"OCRMill v{VERSION}")
 
     @pyqtSlot()
     def _show_settings_dialog(self):

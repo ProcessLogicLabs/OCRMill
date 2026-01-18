@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- High-resolution OCRMill Icon - 512x512 -->
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#56E0D5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#28B5AA;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A78BFA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- White background circle -->
+  <circle cx="256" cy="256" r="248" fill="#ffffff"/>
+
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="232" fill="none" stroke="url(#tealGrad)" stroke-width="16"/>
+
+  <!-- Mill wheel -->
+  <circle cx="256" cy="256" r="144" fill="url(#tealGrad)"/>
+
+  <!-- White spokes creating mill pattern - main cross -->
+  <g stroke="#ffffff" stroke-width="24" stroke-linecap="round">
+    <line x1="256" y1="128" x2="256" y2="384"/>
+    <line x1="128" y1="256" x2="384" y2="256"/>
+  </g>
+
+  <!-- Diagonal spokes -->
+  <g stroke="#ffffff" stroke-width="16" stroke-linecap="round" opacity="0.7">
+    <line x1="164" y1="164" x2="348" y2="348"/>
+    <line x1="348" y1="164" x2="164" y2="348"/>
+  </g>
+
+  <!-- Center hub -->
+  <circle cx="256" cy="256" r="56" fill="url(#purpleGrad)"/>
+  <circle cx="256" cy="256" r="24" fill="#ffffff"/>
+
+  <!-- Small decorative dots at cardinal points -->
+  <circle cx="256" cy="72" r="12" fill="url(#purpleGrad)"/>
+  <circle cx="256" cy="440" r="12" fill="url(#purpleGrad)"/>
+  <circle cx="72" cy="256" r="12" fill="url(#purpleGrad)"/>
+  <circle cx="440" cy="256" r="12" fill="url(#purpleGrad)"/>
+</svg>
