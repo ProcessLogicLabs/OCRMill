@@ -23,7 +23,6 @@ from updater import UpdateChecker
 from ui.tabs.invoice_tab import InvoiceProcessingTab
 from ui.tabs.parts_tab import PartsDatabaseTab
 from ui.dialogs.settings_dialog import SettingsDialog
-from ui.dialogs.manufacturers_dialog import ManufacturersDialog
 from ui.dialogs.mid_management_dialog import MIDManagementDialog
 from ui.dialogs.hts_reference_dialog import HTSReferenceDialog
 from ui.dialogs.login_dialog import LoginDialog
@@ -144,12 +143,6 @@ class OCRMillMainWindow(QMainWindow):
 
         settings_menu.addSeparator()
 
-        mid_management_action = QAction("&MID List Management...", self)
-        mid_management_action.triggered.connect(self._show_mid_management_dialog)
-        settings_menu.addAction(mid_management_action)
-
-        settings_menu.addSeparator()
-
         db_location_action = QAction("Change &Database Location...", self)
         db_location_action.triggered.connect(self._change_database_location)
         settings_menu.addAction(db_location_action)
@@ -185,10 +178,10 @@ class OCRMillMainWindow(QMainWindow):
 
         master_data_menu.addSeparator()
 
-        # Manufacturers/MID management (moved from References menu)
-        manufacturers_action = QAction("&Manufacturers/MID...", self)
-        manufacturers_action.triggered.connect(self._show_manufacturers_dialog)
-        master_data_menu.addAction(manufacturers_action)
+        # MID List Management (using new mid_table)
+        mid_action = QAction("&MID List Management...", self)
+        mid_action.triggered.connect(self._show_mid_management_dialog)
+        master_data_menu.addAction(mid_action)
 
         # References menu
         references_menu = menubar.addMenu("&References")
@@ -569,12 +562,6 @@ class OCRMillMainWindow(QMainWindow):
                     "Report Error",
                     f"Failed to generate reports:\n{e}"
                 )
-
-    @pyqtSlot()
-    def _show_manufacturers_dialog(self):
-        """Show the manufacturers management dialog."""
-        dialog = ManufacturersDialog(self.db, self)
-        dialog.exec()
 
     @pyqtSlot()
     def _show_mid_management_dialog(self):

@@ -336,18 +336,20 @@ class ProcessorEngine:
 
         # Add items to parts database
         for item in items:
-            # Look up MID and country_origin from manufacturer name
+            # Look up MID and country_origin from manufacturer name (using mid_table)
             if ('mid' not in item or not item['mid']) or ('country_origin' not in item or not item['country_origin']):
                 manufacturer_name = item.get('manufacturer_name', '')
                 if manufacturer_name:
-                    manufacturer = self.parts_db.get_manufacturer_by_name(manufacturer_name)
-                    if manufacturer:
+                    mid_entry = self.parts_db.get_mid_by_manufacturer_name(manufacturer_name)
+                    if mid_entry:
                         if 'mid' not in item or not item['mid']:
-                            if manufacturer.get('mid'):
-                                item['mid'] = manufacturer.get('mid', '')
+                            if mid_entry.get('mid'):
+                                item['mid'] = mid_entry.get('mid', '')
+                        # Extract country from MID code (first 2 characters)
                         if 'country_origin' not in item or not item['country_origin']:
-                            if manufacturer.get('country'):
-                                item['country_origin'] = manufacturer.get('country', '')
+                            mid_code = mid_entry.get('mid', '')
+                            if len(mid_code) >= 2:
+                                item['country_origin'] = mid_code[:2].upper()
 
             # Extract country from MID if available
             if ('country_origin' not in item or not item['country_origin']) and item.get('mid'):

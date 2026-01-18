@@ -1316,6 +1316,50 @@ class PartsDatabase:
         result = cursor.fetchone()
         return dict(result) if result else None
 
+    def get_mid_by_manufacturer_name(self, manufacturer_name: str) -> Optional[Dict]:
+        """
+        Get MID entry by manufacturer name (case-insensitive partial match).
+        Handles accented characters by normalizing to ASCII.
+        Returns the first/best match if multiple exist.
+
+        This is the new method that uses mid_table instead of manufacturers table.
+        """
+        if not manufacturer_name:
+            return None
+
+        import unicodedata
+        def normalize(s):
+            return ''.join(
+                c for c in unicodedata.normalize('NFD', s)
+                if unicodedata.category(c) != 'Mn'
+            ).lower()
+
+        normalized_search = normalize(manufacturer_name)
+
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM mid_table")
+
+        candidates = []
+        for row in cursor.fetchall():
+            db_name = row['manufacturer_name'] or ''
+            normalized_db = normalize(db_name)
+
+            # Exact match - highest priority
+            if normalized_db == normalized_search:
+                return dict(row)
+
+            # Check if either contains the other
+            if normalized_search in normalized_db or normalized_db in normalized_search:
+                score = min(len(normalized_search), len(normalized_db)) / max(len(normalized_search), len(normalized_db)) if normalized_db else 0
+                candidates.append((score, row))
+
+        # Return best scoring candidate
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return dict(candidates[0][1])
+
+        return None
+
     def add_mid(self, mid: str, manufacturer_name: str = "", customer_id: str = "",
                 related_parties: str = "N") -> bool:
         """Add a new MID entry. Returns True if successful."""
