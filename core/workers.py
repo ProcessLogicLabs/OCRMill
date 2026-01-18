@@ -29,6 +29,7 @@ class ProcessingWorker(QThread):
     # Signals for communicating with main thread
     log_message = pyqtSignal(str)
     files_processed = pyqtSignal(int)
+    file_failed = pyqtSignal(str)  # Emitted when a file fails (filename)
     error_occurred = pyqtSignal(str)
     status_changed = pyqtSignal(str)
 
@@ -47,11 +48,15 @@ class ProcessingWorker(QThread):
 
         while not self._stop_requested:
             try:
-                # Process any PDFs in the input folder
-                count = self.engine.process_folder(self.input_folder, self.output_folder)
+                # Process any PDFs in the input folder with failure tracking
+                count, failed_files = self._process_folder_with_tracking()
                 if count > 0:
                     self.files_processed.emit(count)
                     self._log(f"Processed {count} file(s)")
+
+                # Emit file_failed signal for each failed file
+                for filename in failed_files:
+                    self.file_failed.emit(filename)
 
             except Exception as e:
                 self._log(f"Error during processing: {e}")
@@ -65,6 +70,36 @@ class ProcessingWorker(QThread):
 
         self._log("Monitoring stopped")
         self.status_changed.emit("Stopped")
+
+    def _process_folder_with_tracking(self):
+        """Process folder and track which files failed."""
+        self.input_folder.mkdir(exist_ok=True, parents=True)
+        self.output_folder.mkdir(exist_ok=True, parents=True)
+
+        pdf_files = list(self.input_folder.glob("*.pdf"))
+        if not pdf_files:
+            return 0, []
+
+        self._log(f"Found {len(pdf_files)} PDF(s) to process")
+        processed_count = 0
+        failed_files = []
+
+        for pdf_path in pdf_files:
+            try:
+                items = self.engine.process_pdf(pdf_path)
+                if items:
+                    self.engine.save_to_csv(items, self.output_folder, pdf_name=pdf_path.name)
+                    self.engine.move_to_processed(pdf_path)
+                    processed_count += 1
+                else:
+                    self.engine.move_to_failed(pdf_path, reason="No items extracted")
+                    failed_files.append(pdf_path.name)
+            except Exception as e:
+                self._log(f"  Error processing {pdf_path.name}: {e}")
+                self.engine.move_to_failed(pdf_path, reason=f"Error: {str(e)[:50]}")
+                failed_files.append(pdf_path.name)
+
+        return processed_count, failed_files
 
     def request_stop(self):
         """Request the worker to stop gracefully."""

@@ -1,21 +1,66 @@
 {
-  "input_folder": "input",
-  "output_folder": "output",
-  "database_path": "Resources/parts_database.db",
+  "input_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\input",
+  "output_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\output",
+  "database_path": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\Resources\\parts_database.db",
   "poll_interval": 10,
   "auto_start": false,
   "consolidate_multi_invoice": true,
-  "auto_cbp_export": false,
+  "auto_cbp_export": true,
   "check_updates_on_startup": true,
   "cbp_export": {
-    "input_folder": "output/Processed",
-    "output_folder": "output/CBP_Export"
+    "input_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\output\\Processed",
+    "output_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\output\\CBP_Export"
   },
   "templates": {
     "mmcite_czech": {
       "enabled": true
     },
     "mmcite_brazilian": {
+      "enabled": true
+    },
+    "bill_of_lading": {
+      "enabled": true
+    },
+    "coexpo_icat_sa": {
+      "enabled": true
+    },
+    "hebei_shinyee": {
+      "enabled": true
+    },
+    "himcast_invoice": {
+      "enabled": true
+    },
+    "international_invoice": {
+      "enabled": true
+    },
+    "lacey_act_form": {
+      "enabled": true
+    },
+    "masonry_supply_agarwalla": {
+      "enabled": true
+    },
+    "proforma_invoice": {
+      "enabled": true
+    },
+    "seksaria_foundries": {
+      "enabled": true
+    },
+    "simple_invoice": {
+      "enabled": true
+    },
+    "smart_shaanxi_template": {
+      "enabled": true
+    },
+    "smart_universal": {
+      "enabled": true
+    },
+    "standard_invoice": {
+      "enabled": true
+    },
+    "tabular_invoice": {
+      "enabled": true
+    },
+    "vitech_development_limited": {
       "enabled": true
     }
   },
@@ -31,7 +76,7 @@
     "hts_code": true,
     "country_origin": true,
     "mid": true,
-    "client_code": false,
+    "client_code": true,
     "steel_pct": true,
     "aluminum_pct": true,
     "copper_pct": false,
@@ -45,16 +90,193 @@
     "last_updated": true
   },
   "licensing": {
-    "require_login": false,
-    "allow_skip_login": true
+    "require_login": true,
+    "allow_skip_login": false
   },
   "billing": {
     "enabled": true,
-    "remote_sync_enabled": false,
+    "remote_sync_enabled": true,
     "config_repo_path": null
   },
   "auth": {
     "allowed_domains": [],
     "auto_windows_login": true
+  },
+  "shared_templates_folder": "Y:/Dev/Tariffmill/Templates",
+  "auto_process_drops": false,
+  "output_mapping_profiles": {
+    "mmcite": {
+      "columns": [
+        {
+          "internal_name": "invoice_number",
+          "display_name": "Invoice Number",
+          "enabled": true
+        },
+        {
+          "internal_name": "project_number",
+          "display_name": "Project Number",
+          "enabled": true
+        },
+        {
+          "internal_name": "part_number",
+          "display_name": "Part Number",
+          "enabled": true
+        },
+        {
+          "internal_name": "description",
+          "display_name": "Description",
+          "enabled": true
+        },
+        {
+          "internal_name": "mid",
+          "display_name": "MID",
+          "enabled": true
+        },
+        {
+          "internal_name": "country_origin",
+          "display_name": "Country Origin",
+          "enabled": true
+        },
+        {
+          "internal_name": "hts_code",
+          "display_name": "HTS Code",
+          "enabled": true
+        },
+        {
+          "internal_name": "quantity",
+          "display_name": "Quantity",
+          "enabled": true
+        },
+        {
+          "internal_name": "net_weight",
+          "display_name": "Net Weight",
+          "enabled": true
+        },
+        {
+          "internal_name": "total_price",
+          "display_name": "Total Price",
+          "enabled": true
+        },
+        {
+          "internal_name": "packages",
+          "display_name": "Packages",
+          "enabled": false
+        },
+        {
+          "internal_name": "po_number",
+          "display_name": "PO Number",
+          "enabled": false
+        },
+        {
+          "internal_name": "gross_weight",
+          "display_name": "Gross Weight",
+          "enabled": false
+        },
+        {
+          "internal_name": "dimensions",
+          "display_name": "Dimensions",
+          "enabled": false
+        },
+        {
+          "internal_name": "unit_price",
+          "display_name": "Unit Price",
+          "enabled": false
+        },
+        {
+          "internal_name": "bol_gross_weight",
+          "display_name": "BOL Gross Weight",
+          "enabled": false
+        }
+      ],
+      "split_by_invoice": true
+    }
+  },
+  "output_column_mapping": {
+    "columns": [
+      {
+        "internal_name": "invoice_number",
+        "display_name": "Invoice Number",
+        "enabled": true
+      },
+      {
+        "internal_name": "project_number",
+        "display_name": "Project Number",
+        "enabled": true
+      },
+      {
+        "internal_name": "part_number",
+        "display_name": "Part Number",
+        "enabled": true
+      },
+      {
+        "internal_name": "description",
+        "display_name": "Description",
+        "enabled": true
+      },
+      {
+        "internal_name": "mid",
+        "display_name": "MID",
+        "enabled": true
+      },
+      {
+        "internal_name": "country_origin",
+        "display_name": "Country Origin",
+        "enabled": true
+      },
+      {
+        "internal_name": "hts_code",
+        "display_name": "HTS Code",
+        "enabled": true
+      },
+      {
+        "internal_name": "quantity",
+        "display_name": "Quantity",
+        "enabled": true
+      },
+      {
+        "internal_name": "net_weight",
+        "display_name": "Net Weight",
+        "enabled": true
+      },
+      {
+        "internal_name": "total_price",
+        "display_name": "Total Price",
+        "enabled": true
+      },
+      {
+        "internal_name": "packages",
+        "display_name": "Packages",
+        "enabled": false
+      },
+      {
+        "internal_name": "po_number",
+        "display_name": "PO Number",
+        "enabled": false
+      },
+      {
+        "internal_name": "gross_weight",
+        "display_name": "Gross Weight",
+        "enabled": false
+      },
+      {
+        "internal_name": "dimensions",
+        "display_name": "Dimensions",
+        "enabled": false
+      },
+      {
+        "internal_name": "unit_price",
+        "display_name": "Unit Price",
+        "enabled": false
+      },
+      {
+        "internal_name": "bol_gross_weight",
+        "display_name": "BOL Gross Weight",
+        "enabled": false
+      }
+    ],
+    "split_by_invoice": true
+  },
+  "export_options": {
+    "split_by_invoice": true
   }
 }

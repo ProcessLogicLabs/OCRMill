@@ -19,6 +19,9 @@ from .base_template import BaseTemplate
 # Registry of all available templates (populated dynamically)
 TEMPLATE_REGISTRY = {}
 
+# Track template sources (template_name -> 'local' or 'shared')
+TEMPLATE_SOURCES = {}
+
 # Files to exclude from template discovery
 EXCLUDED_FILES = {'__init__.py', 'base_template.py', 'sample_template.py'}
 
@@ -104,8 +107,9 @@ def _discover_templates():
     - Contain a class that inherits from BaseTemplate
     - Not be in EXCLUDED_FILES
     """
-    global TEMPLATE_REGISTRY
+    global TEMPLATE_REGISTRY, TEMPLATE_SOURCES
     TEMPLATE_REGISTRY.clear()
+    TEMPLATE_SOURCES.clear()
 
     local_templates_dir = Path(__file__).parent
     shared_folder = get_shared_templates_folder()
@@ -125,6 +129,7 @@ def _discover_templates():
         module_name = file_path.stem
         if _load_template_from_file(file_path, module_name):
             loaded_templates.add(module_name)
+            TEMPLATE_SOURCES[module_name] = 'local'
 
     # SECOND: Load shared templates (only if not already loaded locally)
     if shared_folder:
@@ -146,31 +151,36 @@ def _discover_templates():
 
                 if _load_template_from_file(file_path, module_name):
                     loaded_templates.add(module_name)
+                    TEMPLATE_SOURCES[module_name] = 'shared'
                     print(f"Loaded shared template (fallback): {module_name}")
 
 
 def sync_templates_to_shared() -> dict:
     """
-    Sync local templates to the shared folder.
+    Bidirectional sync between local and shared templates.
 
-    Copies local templates to the shared folder if:
-    - The local template is newer (based on modification time)
-    - The template doesn't exist in the shared folder
+    - Copies newer templates in either direction based on modification time
+    - Templates that only exist in one location are copied to the other
 
     Returns a dict with sync results:
-    - 'synced': list of templates that were copied to shared
-    - 'skipped': list of templates that were skipped (shared is newer or same)
+    - 'to_shared': list of templates copied from local to shared
+    - 'to_local': list of templates copied from shared to local
+    - 'skipped': list of templates that were already in sync
     - 'errors': list of (template, error) tuples for failed syncs
     """
     import shutil
 
-    results = {'synced': [], 'skipped': [], 'errors': []}
+    results = {'to_shared': [], 'to_local': [], 'skipped': [], 'errors': []}
 
     shared_folder = get_shared_templates_folder()
     if not shared_folder:
+        results['errors'].append(('shared_folder', 'No shared folder configured'))
         return results
 
     shared_path = Path(shared_folder)
+    local_templates_dir = Path(__file__).parent
+
+    # Create shared folder if it doesn't exist
     if not shared_path.exists():
         try:
             shared_path.mkdir(parents=True, exist_ok=True)
@@ -178,33 +188,48 @@ def sync_templates_to_shared() -> dict:
             results['errors'].append(('shared_folder', str(e)))
             return results
 
-    local_templates_dir = Path(__file__).parent
+    # Get all template files from both locations
+    local_files = {f.stem: f for f in local_templates_dir.glob('*.py')
+                   if f.name not in EXCLUDED_FILES and ' ' not in f.name}
+    shared_files = {f.stem: f for f in shared_path.glob('*.py')
+                    if f.name not in EXCLUDED_FILES and ' ' not in f.name}
 
-    for local_file in local_templates_dir.glob('*.py'):
-        if local_file.name in EXCLUDED_FILES:
-            continue
+    all_templates = set(local_files.keys()) | set(shared_files.keys())
 
-        if ' ' in local_file.name:
-            continue
-
-        module_name = local_file.stem
-        shared_file = shared_path / local_file.name
+    for module_name in all_templates:
+        local_file = local_files.get(module_name)
+        shared_file = shared_files.get(module_name)
 
         try:
-            # Check if we need to sync
-            if shared_file.exists():
+            if local_file and shared_file:
+                # Both exist - sync based on modification time
                 local_mtime = local_file.stat().st_mtime
                 shared_mtime = shared_file.stat().st_mtime
 
-                # Only sync if local is newer
-                if local_mtime <= shared_mtime:
+                if abs(local_mtime - shared_mtime) < 1:  # Within 1 second = same
                     results['skipped'].append(module_name)
-                    continue
+                elif local_mtime > shared_mtime:
+                    # Local is newer - copy to shared
+                    shutil.copy2(local_file, shared_path / local_file.name)
+                    results['to_shared'].append(module_name)
+                    print(f"Synced to shared: {module_name}")
+                else:
+                    # Shared is newer - copy to local
+                    shutil.copy2(shared_file, local_templates_dir / shared_file.name)
+                    results['to_local'].append(module_name)
+                    print(f"Synced to local: {module_name}")
 
-            # Copy local to shared
-            shutil.copy2(local_file, shared_file)
-            results['synced'].append(module_name)
-            print(f"Synced template to shared: {module_name}")
+            elif local_file and not shared_file:
+                # Only in local - copy to shared
+                shutil.copy2(local_file, shared_path / local_file.name)
+                results['to_shared'].append(module_name)
+                print(f"Copied to shared (new): {module_name}")
+
+            elif shared_file and not local_file:
+                # Only in shared - copy to local
+                shutil.copy2(shared_file, local_templates_dir / shared_file.name)
+                results['to_local'].append(module_name)
+                print(f"Copied to local (new): {module_name}")
 
         except Exception as e:
             results['errors'].append((module_name, str(e)))

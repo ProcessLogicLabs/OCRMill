@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox,
     QFrame, QGridLayout, QSplitter, QRadioButton, QButtonGroup,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QScrollArea
+    QScrollArea, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer
 from PyQt6.QtGui import QColor
@@ -31,78 +31,135 @@ from ui.widgets.log_viewer import LogViewerWidget, CompactLogViewer
 
 
 class DropListWidget(QListWidget):
-    """QListWidget that accepts file drops."""
+    """QListWidget that accepts file drops - respects application theme."""
 
     files_dropped = pyqtSignal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
+        # DropOnly mode for accepting external file drops
         self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
-        self.setStyleSheet("""
-            QListWidget {
-                border: 2px dashed #5f9ea0;
-                border-radius: 4px;
-                background-color: #f8ffff;
-            }
-            QListWidget:hover {
-                border-color: #4a8a8c;
-                background-color: #e8f8f8;
-            }
-        """)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.setObjectName("dropListWidget")
+        self._is_dragging = False
+        self._drop_in_progress = False  # Prevent re-entrant drop handling
+        # Cache the base stylesheet to avoid dynamic updates during drag
+        self._init_style()
+
+    def _init_style(self):
+        """Initialize the base style for the widget."""
+        try:
+            app = QApplication.instance()
+            if app:
+                palette = app.palette()
+                self._highlight_color = palette.color(palette.ColorRole.Highlight).name()
+                self._base_color = palette.color(palette.ColorRole.Base).name()
+                self._midlight_color = palette.color(palette.ColorRole.Midlight).name()
+            else:
+                # Fallback colors
+                self._highlight_color = "#0078d4"
+                self._base_color = "#ffffff"
+                self._midlight_color = "#f0f0f0"
+            self._apply_normal_style()
+        except Exception:
+            pass  # Fail silently if styling fails
+
+    def _apply_normal_style(self):
+        """Apply the normal (non-dragging) style."""
+        try:
+            self.setStyleSheet(f"""
+                QListWidget#dropListWidget {{
+                    border: 2px dashed {self._highlight_color};
+                    border-radius: 4px;
+                    background-color: {self._base_color};
+                }}
+                QListWidget#dropListWidget:hover {{
+                    border: 2px dashed {self._highlight_color};
+                }}
+            """)
+        except Exception:
+            pass
+
+    def _apply_dragging_style(self):
+        """Apply the dragging style."""
+        try:
+            self.setStyleSheet(f"""
+                QListWidget#dropListWidget {{
+                    border: 2px solid {self._highlight_color};
+                    border-radius: 4px;
+                    background-color: {self._midlight_color};
+                }}
+            """)
+        except Exception:
+            pass
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            # Check if any URLs are PDF files
-            for url in event.mimeData().urls():
-                if url.toLocalFile().lower().endswith('.pdf'):
-                    event.acceptProposedAction()
-                    self.setStyleSheet("""
-                        QListWidget {
-                            border: 2px solid #5f9ea0;
-                            border-radius: 4px;
-                            background-color: #d4edda;
-                        }
-                    """)
-                    return
-        event.ignore()
+        try:
+            if event.mimeData().hasUrls():
+                # Check if any URLs are PDF files
+                for url in event.mimeData().urls():
+                    if url.toLocalFile().lower().endswith('.pdf'):
+                        event.acceptProposedAction()
+                        self._is_dragging = True
+                        # Defer style update to avoid crash during drag event
+                        QTimer.singleShot(0, self._apply_dragging_style)
+                        return
+            event.ignore()
+        except Exception:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        """Required for drag and drop to work in PyQt6."""
+        try:
+            if event.mimeData().hasUrls():
+                for url in event.mimeData().urls():
+                    if url.toLocalFile().lower().endswith('.pdf'):
+                        event.acceptProposedAction()
+                        return
+            event.ignore()
+        except Exception:
+            event.ignore()
 
     def dragLeaveEvent(self, event):
-        self.setStyleSheet("""
-            QListWidget {
-                border: 2px dashed #5f9ea0;
-                border-radius: 4px;
-                background-color: #f8ffff;
-            }
-            QListWidget:hover {
-                border-color: #4a8a8c;
-                background-color: #e8f8f8;
-            }
-        """)
-        event.accept()
+        try:
+            self._is_dragging = False
+            # Defer style update to avoid crash during drag event
+            QTimer.singleShot(0, self._apply_normal_style)
+            event.accept()
+        except Exception:
+            pass
 
     def dropEvent(self, event):
-        files = []
-        for url in event.mimeData().urls():
-            file_path = url.toLocalFile()
-            if file_path.lower().endswith('.pdf'):
-                files.append(file_path)
+        # Prevent re-entrant drop handling (fixes duplicate processing issue)
+        if self._drop_in_progress:
+            event.setDropAction(Qt.DropAction.IgnoreAction)
+            event.accept()
+            return
+        self._drop_in_progress = True
 
-        self.setStyleSheet("""
-            QListWidget {
-                border: 2px dashed #5f9ea0;
-                border-radius: 4px;
-                background-color: #f8ffff;
-            }
-            QListWidget:hover {
-                border-color: #4a8a8c;
-                background-color: #e8f8f8;
-            }
-        """)
+        try:
+            files = []
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if file_path.lower().endswith('.pdf'):
+                    files.append(file_path)
 
-        if files:
-            self.files_dropped.emit(files)
-            event.acceptProposedAction()
+            self._is_dragging = False
+            # Defer style update to avoid crash during drop event
+            QTimer.singleShot(0, self._apply_normal_style)
+
+            if files:
+                self.files_dropped.emit(files)
+                # Set drop action and accept - do NOT call super().dropEvent()
+                event.setDropAction(Qt.DropAction.CopyAction)
+                event.accept()
+            else:
+                event.ignore()
+        except Exception:
+            event.ignore()
+        finally:
+            self._drop_in_progress = False
 
 
 class ProcessorEngine:
@@ -213,7 +270,11 @@ class ProcessorEngine:
                         continue
 
                     # Check for new invoice on this page
+                    # Try multiple invoice number formats
                     inv_match = re.search(r'(?:Proforma\s+)?[Ii]nvoice\s+(?:number|n)\.?\s*:?\s*(\d+(?:/\d+)?)', page_text)
+                    if not inv_match:
+                        # Try Vitech format: INVOICE # HFVT25-A001
+                        inv_match = re.search(r'[Ii]nvoice\s*#\s*([A-Z0-9-]+)', page_text)
                     proj_match = re.search(r'(?:\d+\.\s*)?[Pp]roject\s*(?:n\.?)?\s*:?\s*(US\d+[A-Z]\d+)', page_text, re.IGNORECASE)
 
                     new_invoice = inv_match.group(1) if inv_match else None
@@ -242,12 +303,15 @@ class ProcessorEngine:
                     page_buffer.append(page_text)
 
                 # Process remaining pages in buffer
-                if page_buffer and current_invoice:
+                if page_buffer:
                     buffer_text = "\n".join(page_buffer)
-                    _, _, items = template.extract_all(buffer_text)
+                    inv_num, proj_num, items = template.extract_all(buffer_text)
+                    # Use template-extracted values as fallback if regex didn't find them
+                    final_invoice = current_invoice or inv_num or "UNKNOWN"
+                    final_project = current_project or proj_num or "UNKNOWN"
                     for item in items:
-                        item['invoice_number'] = current_invoice
-                        item['project_number'] = current_project
+                        item['invoice_number'] = final_invoice
+                        item['project_number'] = final_project
                         if bol_weight:
                             item['bol_gross_weight'] = bol_weight
                         if bol_weight and ('net_weight' not in item or not item.get('net_weight')):
@@ -313,17 +377,57 @@ class ProcessorEngine:
                 by_invoice[inv_num] = []
             by_invoice[inv_num].append(item)
 
-        # Determine columns
-        columns = ['invoice_number', 'project_number', 'part_number', 'description', 'mid', 'country_origin', 'hts_code', 'quantity', 'total_price']
-        for item in items:
-            for key in item.keys():
-                if key not in columns:
-                    columns.append(key)
+        # Get column mapping configuration
+        mapping = self.config.get_output_column_mapping()
+        if mapping and 'columns' in mapping:
+            # Use configured columns (in order, only enabled ones)
+            columns = []
+            column_renames = {}
+            for col_config in mapping['columns']:
+                if col_config.get('enabled', True):
+                    internal = col_config['internal_name']
+                    display = col_config['display_name']
+                    columns.append(internal)
+                    if internal != display:
+                        column_renames[internal] = display
+        else:
+            # Default columns
+            columns = ['invoice_number', 'project_number', 'part_number', 'description', 'mid', 'country_origin', 'hts_code', 'quantity', 'total_price']
+            column_renames = {}
+            # Add any extra columns from items
+            for item in items:
+                for key in item.keys():
+                    if key not in columns:
+                        columns.append(key)
 
-        # Check consolidation mode
+        # Check export options
+        split_by_invoice = self.config.get_export_option('split_by_invoice', False)
         consolidate = self.config.consolidate_multi_invoice
 
-        if consolidate and len(by_invoice) > 1:
+        # Helper function to write CSV with renamed columns
+        def write_csv_with_mapping(filepath, items_to_write, columns, renames):
+            # Rename columns in header
+            header = [renames.get(col, col) for col in columns]
+            with open(filepath, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(header)
+                for item in items_to_write:
+                    row = [item.get(col, '') for col in columns]
+                    writer.writerow(row)
+
+        if split_by_invoice:
+            # Split by invoice - one file per invoice
+            for inv_num, inv_items in by_invoice.items():
+                proj_num = inv_items[0].get('project_number', 'UNKNOWN')
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                safe_inv_num = inv_num.replace('/', '-')
+                filename = f"{safe_inv_num}_{proj_num}_{timestamp}.csv"
+                filepath = output_folder / filename
+
+                write_csv_with_mapping(filepath, inv_items, columns, column_renames)
+                self.log(f"  Saved: {filename} ({len(inv_items)} items)")
+
+        elif consolidate and len(by_invoice) > 1:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             if pdf_name:
                 base_name = Path(pdf_name).stem
@@ -332,10 +436,7 @@ class ProcessorEngine:
             filename = f"{base_name}_{timestamp}.csv"
             filepath = output_folder / filename
 
-            with open(filepath, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')
-                writer.writeheader()
-                writer.writerows(items)
+            write_csv_with_mapping(filepath, items, columns, column_renames)
 
             invoice_list = ", ".join(sorted(by_invoice.keys()))
             self.log(f"  Saved: {filename} ({len(items)} items from {len(by_invoice)} invoices)")
@@ -347,11 +448,7 @@ class ProcessorEngine:
                 filename = f"{safe_inv_num}_{proj_num}_{timestamp}.csv"
                 filepath = output_folder / filename
 
-                with open(filepath, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')
-                    writer.writeheader()
-                    writer.writerows(inv_items)
-
+                write_csv_with_mapping(filepath, inv_items, columns, column_renames)
                 self.log(f"  Saved: {filename} ({len(inv_items)} items)")
 
     def move_to_processed(self, pdf_path: Path, processed_folder: Path = None):
@@ -433,6 +530,7 @@ class InvoiceProcessingTab(QWidget):
 
     log_message = pyqtSignal(str)
     files_processed = pyqtSignal(int)
+    file_failed = pyqtSignal(str)  # Emitted when a file fails processing (filename)
 
     def __init__(self, config: ConfigManager, db: PartsDatabase, parent=None):
         super().__init__(parent)
@@ -442,6 +540,7 @@ class InvoiceProcessingTab(QWidget):
         self._is_processing = False
         self._last_results = []  # Store last processed results for preview
         self._first_show = True  # Track first show for initialization
+        self._last_drop_time = 0  # Debounce for file drops
 
         self._setup_ui()
         self._connect_signals()
@@ -457,11 +556,11 @@ class InvoiceProcessingTab(QWidget):
 
     def _on_first_show(self):
         """Initialize layout after first show."""
-        # Force splitter and table to update
-        if hasattr(self, 'right_splitter'):
-            self.right_splitter.setSizes([450, 150])
+        # Force tables to update for proper Windows rendering
         if hasattr(self, 'results_table'):
             self._delayed_column_init()
+        if hasattr(self, 'preview_tabs'):
+            self.preview_tabs.updateGeometry()
         self.updateGeometry()
         self.repaint()
 
@@ -502,9 +601,8 @@ class InvoiceProcessingTab(QWidget):
         layout.setContentsMargins(0, 0, 5, 0)
         layout.setSpacing(6)
 
-        # Input Files (PDFs) group - also serves as drop zone
+        # Input Files (PDFs) group - DropListWidget handles drops
         input_group = QGroupBox("Input Files (PDFs) - Drop files here")
-        input_group.setAcceptDrops(True)
         input_layout = QVBoxLayout(input_group)
         input_layout.setSpacing(4)
 
@@ -512,7 +610,10 @@ class InvoiceProcessingTab(QWidget):
         self.input_files_list = DropListWidget()
         self.input_files_list.setAlternatingRowColors(True)
         self.input_files_list.setMinimumHeight(100)
-        self.input_files_list.files_dropped.connect(self._on_files_dropped)
+        # Use UniqueConnection to prevent duplicate signal connections
+        self.input_files_list.files_dropped.connect(
+            self._on_files_dropped, Qt.ConnectionType.UniqueConnection
+        )
         self.input_files_list.doubleClicked.connect(self._process_selected_file)
         input_layout.addWidget(self.input_files_list)
 
@@ -532,6 +633,8 @@ class InvoiceProcessingTab(QWidget):
         self.output_files_list = QListWidget()
         self.output_files_list.setAlternatingRowColors(True)
         self.output_files_list.setMaximumHeight(120)
+        self.output_files_list.itemClicked.connect(self._load_output_file)
+        self.output_files_list.itemDoubleClicked.connect(self._open_output_file)
         output_layout.addWidget(self.output_files_list)
 
         # Refresh button
@@ -559,16 +662,21 @@ class InvoiceProcessingTab(QWidget):
         self.auto_start_check.stateChanged.connect(self._save_auto_start)
         actions_layout.addWidget(self.auto_start_check)
 
+        # Auto-process dropped files checkbox
+        self.auto_process_drops_check = QCheckBox("Auto-process dropped files")
+        self.auto_process_drops_check.setChecked(self.config.get('auto_process_drops', True))
+        self.auto_process_drops_check.setToolTip(
+            "When enabled, dropped files are processed immediately.\n"
+            "When disabled, dropped files are copied to the input folder only."
+        )
+        self.auto_process_drops_check.stateChanged.connect(self._save_auto_process_drops)
+        actions_layout.addWidget(self.auto_process_drops_check)
+
         # Separator line
         line1 = QFrame()
         line1.setFrameShape(QFrame.Shape.HLine)
         line1.setStyleSheet("background-color: #ccc;")
         actions_layout.addWidget(line1)
-
-        # Process PDF File button
-        self.process_file_btn = QPushButton("Process PDF File...")
-        self.process_file_btn.clicked.connect(self._browse_files)
-        actions_layout.addWidget(self.process_file_btn)
 
         # Process Folder Now button
         self.process_now_btn = QPushButton("Process Folder Now")
@@ -625,97 +733,65 @@ class InvoiceProcessingTab(QWidget):
         return scroll_area
 
     def _create_right_panel(self) -> QWidget:
-        """Create the right panel with results preview and activity log."""
+        """Create the right panel with tabbed preview (Processing Results / Exported Files)."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 0, 0, 0)
         layout.setSpacing(8)
 
-        # Vertical splitter: top = results preview (large), bottom = activity log (small)
-        self.right_splitter = QSplitter(Qt.Orientation.Vertical)
+        # Tabbed preview panel
+        self.preview_tabs = QTabWidget()
 
-        # Top section: Results Preview table (large area)
-        results_preview = self._create_results_preview()
-        self.right_splitter.addWidget(results_preview)
+        # Tab 1: Processing Results (shows extracted data before/after processing)
+        processing_results_widget = self._create_processing_results_tab()
+        self.preview_tabs.addTab(processing_results_widget, "Processing Results")
 
-        # Bottom section: Sub-tabs with Activity Log and AI Templates (small area)
-        self.sub_tabs = QTabWidget()
+        # Tab 2: Exported Files (shows CSV content when clicking Output Files)
+        exported_files_widget = self._create_exported_files_tab()
+        self.preview_tabs.addTab(exported_files_widget, "Exported Files")
 
-        # Invoice Processing sub-tab (activity log)
-        invoice_processing_widget = self._create_invoice_processing_subtab()
-        self.sub_tabs.addTab(invoice_processing_widget, "Activity Log")
-
-        # AI Templates sub-tab
-        templates_widget = self._create_templates_tab()
-        self.sub_tabs.addTab(templates_widget, "AI Templates")
-
-        self.right_splitter.addWidget(self.sub_tabs)
-
-        # Set sizes: large results preview (3), small log area (1)
-        self.right_splitter.setSizes([450, 150])
-
-        layout.addWidget(self.right_splitter)
+        layout.addWidget(self.preview_tabs)
 
         # Schedule a repaint after the widget is fully initialized (fixes Windows Qt6 rendering)
         QTimer.singleShot(50, self._force_panel_repaint)
 
+        # Create hidden log viewer for background logging (accessible via Help menu)
+        self._setup_background_log()
+
         return panel
 
     def _force_panel_repaint(self):
-        """Force the right panel and splitter to repaint properly on Windows."""
-        if hasattr(self, 'right_splitter'):
-            # Re-apply splitter sizes to trigger layout recalculation
-            self.right_splitter.setSizes([450, 150])
-            self.right_splitter.updateGeometry()
-            self.right_splitter.repaint()
-        if hasattr(self, 'results_table'):
-            self.results_table.updateGeometry()
-            self.results_table.repaint()
-            if self.results_table.viewport():
-                self.results_table.viewport().repaint()
-        if hasattr(self, 'sub_tabs'):
-            self.sub_tabs.updateGeometry()
-            self.sub_tabs.repaint()
-        self.updateGeometry()
-        self.repaint()
+        """Force the right panel and tables to repaint properly on Windows."""
+        try:
+            if hasattr(self, 'preview_tabs'):
+                self.preview_tabs.updateGeometry()
+                self.preview_tabs.repaint()
+            if hasattr(self, 'results_table'):
+                self.results_table.updateGeometry()
+                self.results_table.repaint()
+                if self.results_table.viewport():
+                    self.results_table.viewport().repaint()
+            if hasattr(self, 'exported_file_table'):
+                self.exported_file_table.updateGeometry()
+                self.exported_file_table.repaint()
+                if self.exported_file_table.viewport():
+                    self.exported_file_table.viewport().repaint()
+            self.updateGeometry()
+            self.repaint()
+        except Exception:
+            pass  # Fail silently if repaint fails
 
-    def _create_invoice_processing_subtab(self) -> QWidget:
-        """Create the Activity Log sub-tab."""
+    def _create_processing_results_tab(self) -> QWidget:
+        """Create the Processing Results tab content (shows extracted data after processing)."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(4)
-        layout.setContentsMargins(4, 4, 4, 4)
-
-        # Activity Log viewer (no group box - tab name is already "Activity Log")
-        self.log_viewer = LogViewerWidget()
-        layout.addWidget(self.log_viewer)
-
-        return widget
-
-    def _create_templates_tab(self) -> QWidget:
-        """Create the AI Templates configuration tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        layout.addWidget(QLabel("Enable/disable invoice templates:"))
-
-        self.template_checks = {}
-        for name in TEMPLATE_REGISTRY.keys():
-            check = QCheckBox(name.replace('_', ' ').title())
-            check.setChecked(self.config.get_template_enabled(name))
-            check.stateChanged.connect(lambda state, n=name: self._save_template_enabled(n, state))
-            self.template_checks[name] = check
-            layout.addWidget(check)
-
-        layout.addStretch()
-
-        return widget
-
-    def _create_results_preview(self) -> QWidget:
-        """Create the dynamic Results Preview table at the bottom."""
-        group = QGroupBox("Results Preview")
-        layout = QVBoxLayout(group)
         layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+
+        # Header label
+        header = QLabel("Extracted data from processed PDFs:")
+        header.setStyleSheet("font-weight: bold; color: #666;")
+        layout.addWidget(header)
 
         # Results table - dynamic columns based on extracted data
         self.results_table = QTableWidget()
@@ -748,7 +824,51 @@ class InvoiceProcessingTab(QWidget):
 
         layout.addLayout(status_layout)
 
-        return group
+        return widget
+
+    def _create_exported_files_tab(self) -> QWidget:
+        """Create the Exported Files tab content (shows CSV content when clicking Output Files)."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+
+        # Header label
+        header = QLabel("Click a CSV file in Output Files to preview its contents:")
+        header.setStyleSheet("font-weight: bold; color: #666;")
+        layout.addWidget(header)
+
+        # Table to preview exported CSV content
+        self.exported_file_table = QTableWidget()
+        self.exported_file_table.setAlternatingRowColors(True)
+        self.exported_file_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.exported_file_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.exported_file_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.exported_file_table.horizontalHeader().setStretchLastSection(True)
+
+        # Initialize with placeholder
+        self.exported_file_table.setColumnCount(1)
+        self.exported_file_table.setHorizontalHeaderLabels(["Select a CSV file from Output Files to preview"])
+        self.exported_file_table.setRowCount(0)
+
+        layout.addWidget(self.exported_file_table)
+
+        # Status bar for exported file
+        status_layout = QHBoxLayout()
+        self.exported_file_status = QLabel("No file selected")
+        self.exported_file_status.setStyleSheet("color: #666;")
+        status_layout.addWidget(self.exported_file_status)
+        status_layout.addStretch()
+
+        layout.addLayout(status_layout)
+
+        return widget
+
+    def _setup_background_log(self):
+        """Set up background logging (log viewer accessible via Help menu)."""
+        # Create a hidden log viewer widget for storing log messages
+        self.log_viewer = LogViewerWidget()
+        self.log_viewer.setVisible(False)  # Hidden - accessed via Help > Activity Log
 
     def _init_results_columns(self):
         """Initialize results table with default columns."""
@@ -782,115 +902,143 @@ class InvoiceProcessingTab(QWidget):
 
     def _force_header_repaint(self):
         """Force the table header to repaint properly."""
-        header = self.results_table.horizontalHeader()
-        header.updateGeometry()
-        header.repaint()
-        self.results_table.viewport().update()
+        try:
+            if not hasattr(self, 'results_table'):
+                return
+            header = self.results_table.horizontalHeader()
+            if header:
+                header.updateGeometry()
+                header.repaint()
+            viewport = self.results_table.viewport()
+            if viewport:
+                viewport.update()
+        except Exception:
+            pass  # Fail silently if repaint fails
 
     def _delayed_column_init(self):
         """Delayed column initialization for Windows rendering fix."""
-        if not hasattr(self, 'results_table'):
-            return
+        try:
+            if not hasattr(self, 'results_table'):
+                return
 
-        # Re-apply column widths after widget is fully initialized
-        column_widths = [110, 180, 70, 85, 85, 75, 90]
-        for i, width in enumerate(column_widths):
-            if i < self.results_table.columnCount():
-                self.results_table.setColumnWidth(i, width)
+            # Re-apply column widths after widget is fully initialized
+            column_widths = [110, 180, 70, 85, 85, 75, 90]
+            for i, width in enumerate(column_widths):
+                if i < self.results_table.columnCount():
+                    self.results_table.setColumnWidth(i, width)
 
-        # Force header and table update
-        header = self.results_table.horizontalHeader()
-        header.updateGeometry()
+            # Force header and table update
+            header = self.results_table.horizontalHeader()
+            if header:
+                header.updateGeometry()
 
-        # Ensure Description column stretches
-        if self.results_table.columnCount() > 1:
-            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+                # Ensure Description column stretches
+                if self.results_table.columnCount() > 1:
+                    header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
-        self.results_table.updateGeometry()
-        self.results_table.repaint()
+            self.results_table.updateGeometry()
+            self.results_table.repaint()
 
-        if self.results_table.viewport():
-            self.results_table.viewport().update()
+            viewport = self.results_table.viewport()
+            if viewport:
+                viewport.update()
+        except Exception:
+            pass  # Fail silently if initialization fails
 
     def _update_results_table(self, items: list):
         """Update the results table with extracted items (dynamic columns)."""
-        if not items:
-            return
+        import traceback
 
-        self._last_results = items
+        try:
+            if not items:
+                self._log("No items to display in results table")
+                return
 
-        # Determine all unique keys across all items
-        all_keys = set()
-        for item in items:
-            all_keys.update(item.keys())
+            self._log(f"Updating results table with {len(items)} items...")
+            self._last_results = items
 
-        # Define preferred column order (common fields first)
-        preferred_order = [
-            'part_number', 'description', 'quantity', 'unit_price', 'total_price',
-            'invoice_number', 'project_number', 'hts_code', 'country_origin', 'mid',
-            'manufacturer_name', 'net_weight', 'gross_weight'
-        ]
+            # Switch to Processing Results tab to show the user the results
+            if hasattr(self, 'preview_tabs'):
+                self.preview_tabs.setCurrentIndex(0)  # Processing Results is tab 0
 
-        # Build column list: preferred first, then remaining alphabetically
-        columns = []
-        for key in preferred_order:
-            if key in all_keys:
-                columns.append(key)
-                all_keys.discard(key)
-        columns.extend(sorted(all_keys))
+            # Determine all unique keys across all items
+            all_keys = set()
+            for item in items:
+                all_keys.update(item.keys())
 
-        # Set up table columns
-        display_names = {
-            'part_number': 'Part Number',
-            'description': 'Description',
-            'quantity': 'Quantity',
-            'unit_price': 'Unit Price',
-            'total_price': 'Total',
-            'invoice_number': 'Invoice #',
-            'project_number': 'Project #',
-            'hts_code': 'HTS Code',
-            'country_origin': 'Country',
-            'mid': 'MID',
-            'manufacturer_name': 'Manufacturer',
-            'net_weight': 'Net Weight',
-            'gross_weight': 'Gross Weight',
-            'bol_gross_weight': 'BOL Weight'
-        }
+            # Define preferred column order (common fields first)
+            preferred_order = [
+                'part_number', 'description', 'quantity', 'unit_price', 'total_price',
+                'invoice_number', 'project_number', 'hts_code', 'country_origin', 'mid',
+                'manufacturer_name', 'net_weight', 'gross_weight'
+            ]
 
-        self.results_table.setColumnCount(len(columns))
-        headers = [display_names.get(col, col.replace('_', ' ').title()) for col in columns]
-        self.results_table.setHorizontalHeaderLabels(headers)
+            # Build column list: preferred first, then remaining alphabetically
+            columns = []
+            for key in preferred_order:
+                if key in all_keys:
+                    columns.append(key)
+                    all_keys.discard(key)
+            columns.extend(sorted(all_keys))
 
-        # Populate rows
-        self.results_table.setRowCount(len(items))
-        for row_idx, item in enumerate(items):
-            for col_idx, key in enumerate(columns):
-                value = item.get(key, '')
-                if value is None:
-                    value = ''
-                elif isinstance(value, float):
-                    if 'price' in key.lower() or 'total' in key.lower():
-                        value = f"${value:,.2f}"
+            # Set up table columns
+            display_names = {
+                'part_number': 'Part Number',
+                'description': 'Description',
+                'quantity': 'Quantity',
+                'unit_price': 'Unit Price',
+                'total_price': 'Total',
+                'invoice_number': 'Invoice #',
+                'project_number': 'Project #',
+                'hts_code': 'HTS Code',
+                'country_origin': 'Country',
+                'mid': 'MID',
+                'manufacturer_name': 'Manufacturer',
+                'net_weight': 'Net Weight',
+                'gross_weight': 'Gross Weight',
+                'bol_gross_weight': 'BOL Weight'
+            }
+
+            self.results_table.setColumnCount(len(columns))
+            headers = [display_names.get(col, col.replace('_', ' ').title()) for col in columns]
+            self.results_table.setHorizontalHeaderLabels(headers)
+
+            # Populate rows
+            self.results_table.setRowCount(len(items))
+            for row_idx, item in enumerate(items):
+                for col_idx, key in enumerate(columns):
+                    value = item.get(key, '')
+                    if value is None:
+                        value = ''
+                    elif isinstance(value, float):
+                        if 'price' in key.lower() or 'total' in key.lower():
+                            value = f"${value:,.2f}"
+                        else:
+                            value = f"{value:,.2f}"
                     else:
-                        value = f"{value:,.2f}"
-                else:
-                    value = str(value)
+                        value = str(value)
 
-                cell = QTableWidgetItem(value)
-                self.results_table.setItem(row_idx, col_idx, cell)
+                    cell = QTableWidgetItem(value)
+                    self.results_table.setItem(row_idx, col_idx, cell)
 
-        # Update status
-        total_value = sum(float(item.get('total_price', 0) or 0) for item in items)
-        self.results_status.setText(f"{len(items)} items extracted | Total: ${total_value:,.2f}")
+            # Update status
+            total_value = sum(float(item.get('total_price', 0) or 0) for item in items)
+            self.results_status.setText(f"{len(items)} items extracted | Total: ${total_value:,.2f}")
 
-        # Resize columns to content
-        self.results_table.resizeColumnsToContents()
+            # Resize columns to content
+            self.results_table.resizeColumnsToContents()
 
-        # Store column mapping for export
-        self._result_columns = columns
+            # Store column mapping for export
+            self._result_columns = columns
 
-        # Force header repaint to fix rendering issues on Windows
-        QTimer.singleShot(0, self._force_header_repaint)
+            # Force header repaint to fix rendering issues on Windows
+            QTimer.singleShot(0, self._force_header_repaint)
+
+            self._log(f"Results table updated: {self.results_table.rowCount()} rows, {self.results_table.columnCount()} columns")
+        except Exception as e:
+            error_msg = traceback.format_exc()
+            self._log(f"ERROR updating results table: {e}")
+            self._write_crash_log("Error in _update_results_table", error_msg)
 
     def _clear_results(self):
         """Clear the results preview table."""
@@ -952,6 +1100,10 @@ class InvoiceProcessingTab(QWidget):
     def _save_auto_start(self, state: int):
         """Save auto-start setting."""
         self.config.auto_start = (state == Qt.CheckState.Checked.value)
+
+    def _save_auto_process_drops(self, state: int):
+        """Save auto-process dropped files setting."""
+        self.config.set('auto_process_drops', state == Qt.CheckState.Checked.value)
 
     def _save_multi_invoice_mode(self, checked: bool):
         """Save multi-invoice PDF mode (split vs combine)."""
@@ -1019,9 +1171,11 @@ class InvoiceProcessingTab(QWidget):
                     self.engine.move_to_processed(pdf_path)
                 else:
                     self.engine.move_to_failed(pdf_path, reason="No items extracted")
+                    self.file_failed.emit(pdf_path.name)
             except Exception as e:
                 self._log(f"Error processing {pdf_path.name}: {e}")
                 self.engine.move_to_failed(pdf_path, reason=str(e)[:50])
+                self.file_failed.emit(pdf_path.name)
 
         count = len([p for p in pdf_files if not p.exists()])  # Files that were moved
         if count > 0:
@@ -1056,26 +1210,59 @@ class InvoiceProcessingTab(QWidget):
     # ----- File handling -----
 
     def _on_files_dropped(self, files: list):
-        """Handle files dropped on drop zone."""
-        input_folder = Path(self.config.input_folder)
-        input_folder.mkdir(exist_ok=True, parents=True)
+        """Handle files dropped on drop zone - behavior controlled by toggle."""
+        import time
+        import traceback
+        import shutil
 
-        copied = 0
-        for file_path in files:
-            src = Path(file_path)
-            dst = input_folder / src.name
-            if not dst.exists():
-                import shutil
-                shutil.copy2(src, dst)
-                copied += 1
-                self._log(f"Added: {src.name}")
+        try:
+            # Debounce: ignore drops within 500ms of each other (prevents double-processing)
+            current_time = time.time()
+            if current_time - self._last_drop_time < 0.5:
+                return  # Ignore duplicate drop event
+            self._last_drop_time = current_time
 
-        if copied > 0:
-            self._refresh_input_files()
-            QMessageBox.information(
-                self, "Files Added",
-                f"Added {copied} file(s) to input folder."
-            )
+            self._log(f"Files dropped: {len(files)} PDF(s)")
+
+            if not files:
+                return
+
+            # Check if auto-process is enabled
+            auto_process = self.config.get('auto_process_drops', True)
+
+            if auto_process:
+                # Process files directly - this updates the results table
+                self._process_pdf_files(files)
+            else:
+                # Just copy files to input folder (don't process)
+                input_folder = Path(self.config.input_folder)
+                input_folder.mkdir(exist_ok=True, parents=True)
+
+                copied_count = 0
+                for file_path in files:
+                    src = Path(file_path)
+                    if src.exists() and src.suffix.lower() == '.pdf':
+                        dest = input_folder / src.name
+                        # Avoid overwriting - add number suffix if exists
+                        if dest.exists():
+                            base = dest.stem
+                            suffix = dest.suffix
+                            counter = 1
+                            while dest.exists():
+                                dest = input_folder / f"{base}_{counter}{suffix}"
+                                counter += 1
+                        shutil.copy2(src, dest)
+                        copied_count += 1
+                        self._log(f"Copied to input folder: {dest.name}")
+
+                if copied_count > 0:
+                    self._log(f"Copied {copied_count} file(s) to input folder")
+                    self._refresh_input_files()
+        except Exception as e:
+            # Log the full exception to crash log and activity log
+            error_msg = traceback.format_exc()
+            self._log(f"ERROR in _on_files_dropped: {e}")
+            self._write_crash_log("Error in _on_files_dropped", error_msg)
 
     def _browse_files(self):
         """Browse for PDF files to process directly."""
@@ -1087,37 +1274,49 @@ class InvoiceProcessingTab(QWidget):
 
     def _process_pdf_files(self, file_paths: list):
         """Process PDF files directly and show results in preview table."""
-        output_folder = Path(self.config.output_folder)
-        output_folder.mkdir(exist_ok=True, parents=True)
+        import traceback
 
-        all_items = []
-        processed_count = 0
+        try:
+            output_folder = Path(self.config.output_folder)
+            output_folder.mkdir(exist_ok=True, parents=True)
 
-        for file_path in file_paths:
-            pdf_path = Path(file_path)
-            self._log(f"Processing: {pdf_path.name}")
+            all_items = []
+            processed_count = 0
 
-            try:
-                items = self.engine.process_pdf(pdf_path)
-                if items:
-                    all_items.extend(items)
-                    self.engine.save_to_csv(items, output_folder, pdf_name=pdf_path.name)
-                    processed_count += 1
-                    self._log(f"  Extracted {len(items)} items")
-                else:
-                    self._log(f"  No items extracted from {pdf_path.name}")
-            except Exception as e:
-                self._log(f"  Error: {e}")
+            for file_path in file_paths:
+                pdf_path = Path(file_path)
+                # Note: engine.process_pdf already logs "Processing: {filename}"
 
-        if processed_count > 0:
-            self.files_processed.emit(processed_count)
-            self._log(f"Processed {processed_count} file(s), {len(all_items)} total items")
+                try:
+                    items = self.engine.process_pdf(pdf_path)
+                    if items:
+                        all_items.extend(items)
+                        self.engine.save_to_csv(items, output_folder, pdf_name=pdf_path.name)
+                        processed_count += 1
+                        self._log(f"  Extracted {len(items)} items")
+                    else:
+                        self._log(f"  No items extracted from {pdf_path.name}")
+                        self.file_failed.emit(pdf_path.name)
+                except Exception as e:
+                    self._log(f"  Error: {e}")
+                    # Log to crash file for diagnostics
+                    error_msg = traceback.format_exc()
+                    self._write_crash_log(f"Error processing {pdf_path.name}", error_msg)
+                    self.file_failed.emit(pdf_path.name)
 
-            # Update results preview table
-            if all_items:
-                self._update_results_table(all_items)
+            if processed_count > 0:
+                self.files_processed.emit(processed_count)
+                self._log(f"Processed {processed_count} file(s), {len(all_items)} total items")
 
-        self._refresh_output_files()
+                # Update results preview table
+                if all_items:
+                    self._update_results_table(all_items)
+
+            self._refresh_output_files()
+        except Exception as e:
+            error_msg = traceback.format_exc()
+            self._log(f"ERROR in _process_pdf_files: {e}")
+            self._write_crash_log("Error in _process_pdf_files", error_msg)
 
     def _refresh_input_files(self):
         """Refresh the input files list."""
@@ -1136,6 +1335,52 @@ class InvoiceProcessingTab(QWidget):
             for csv_file in sorted(output_folder.glob("*.csv"), reverse=True)[:50]:
                 item = QListWidgetItem(csv_file.name)
                 self.output_files_list.addItem(item)
+
+    def _load_output_file(self, item: QListWidgetItem):
+        """Load selected CSV file and display in Exported File Preview table."""
+        if not item:
+            return
+
+        output_folder = Path(self.config.output_folder)
+        csv_path = output_folder / item.text()
+
+        if not csv_path.exists():
+            self._log(f"File not found: {csv_path.name}")
+            return
+
+        try:
+            import csv
+            items = []
+            headers = []
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                headers = reader.fieldnames or []
+                for row in reader:
+                    items.append(dict(row))
+
+            if items and headers:
+                self._update_exported_file_table(items, headers, csv_path.name)
+                self._log(f"Loaded {len(items)} items from {csv_path.name}")
+            else:
+                self._log(f"No data found in {csv_path.name}")
+                self.exported_file_table.setRowCount(0)
+                self.exported_file_table.setColumnCount(1)
+                self.exported_file_table.setHorizontalHeaderLabels(["No data in file"])
+                self.exported_file_status.setText("No items to display")
+        except Exception as e:
+            self._log(f"Error loading CSV: {e}")
+
+    def _open_output_file(self, item: QListWidgetItem):
+        """Double-click handler: Load CSV and switch to Exported Files tab."""
+        if not item:
+            return
+
+        # Load the file content
+        self._load_output_file(item)
+
+        # Switch to Exported Files tab (tab index 1)
+        if hasattr(self, 'preview_tabs'):
+            self.preview_tabs.setCurrentIndex(1)
 
     def _process_selected_file(self):
         """Process the selected input file and show results in preview table."""
@@ -1159,12 +1404,44 @@ class InvoiceProcessingTab(QWidget):
                     self._update_results_table(items)
                 else:
                     self.engine.move_to_failed(pdf_path, reason="No items extracted")
+                    self.file_failed.emit(pdf_path.name)
             except Exception as e:
                 self._log(f"Error: {e}")
                 self.engine.move_to_failed(pdf_path, reason=str(e)[:50])
+                self.file_failed.emit(pdf_path.name)
 
             self._refresh_input_files()
             self._refresh_output_files()
+
+    # ----- Exported File Preview -----
+
+    def _update_exported_file_table(self, items: list, headers: list, filename: str):
+        """Update the exported file preview table with CSV data."""
+        try:
+            # Set up columns
+            self.exported_file_table.setColumnCount(len(headers))
+
+            # Create display-friendly headers
+            display_headers = [h.replace('_', ' ').title() for h in headers]
+            self.exported_file_table.setHorizontalHeaderLabels(display_headers)
+
+            # Populate rows
+            self.exported_file_table.setRowCount(len(items))
+            for row_idx, item in enumerate(items):
+                for col_idx, header in enumerate(headers):
+                    value = item.get(header, '')
+                    if value is None:
+                        value = ''
+                    cell = QTableWidgetItem(str(value))
+                    self.exported_file_table.setItem(row_idx, col_idx, cell)
+
+            # Update status
+            self.exported_file_status.setText(f"{filename}: {len(items)} rows")
+
+            # Resize columns to content
+            self.exported_file_table.resizeColumnsToContents()
+        except Exception as e:
+            self._log(f"Error updating exported file table: {e}")
 
     # ----- Logging -----
 
@@ -1179,3 +1456,24 @@ class InvoiceProcessingTab(QWidget):
     def append_log(self, message: str):
         """Append a pre-formatted message to the log."""
         self.log_viewer.append_message(message)
+
+    def get_log_text(self) -> str:
+        """Get all log text for display in dialog."""
+        return self.log_viewer.get_text()
+
+    def clear_log(self):
+        """Clear the activity log."""
+        self.log_viewer.clear()
+
+    def _write_crash_log(self, context: str, error_msg: str):
+        """Write an error to the crash log file for diagnostics."""
+        try:
+            crash_log = Path(__file__).parent.parent.parent / "crash_log.txt"
+            with open(crash_log, 'a', encoding='utf-8') as f:
+                f.write(f"\n{'='*60}\n")
+                f.write(f"{context} - {datetime.now()}\n")
+                f.write(f"{'='*60}\n")
+                f.write(error_msg)
+                f.write("\n")
+        except Exception:
+            pass  # Fail silently if we can't write to log

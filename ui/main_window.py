@@ -29,6 +29,7 @@ from ui.dialogs.login_dialog import LoginDialog
 from ui.dialogs.license_dialog import LicenseDialog, LicenseExpiredDialog
 from ui.dialogs.billing_dialog import BillingDialog
 from ui.dialogs.statistics_dialog import StatisticsDialog
+from ui.dialogs.output_mapping_dialog import OutputMappingDialog
 from core.workers import ProcessingWorker, UpdateCheckWorker, UpdateDownloadWorker
 from licensing.license_manager import LicenseManager
 from licensing.auth_manager import AuthenticationManager
@@ -165,16 +166,25 @@ class OCRMillMainWindow(QMainWindow):
 
         master_data_menu.addSeparator()
 
+        output_mapping_action = QAction("&Output Column Mapping...", self)
+        output_mapping_action.triggered.connect(self._show_output_mapping_dialog)
+        master_data_menu.addAction(output_mapping_action)
+
+        master_data_menu.addSeparator()
+
         reports_action = QAction("&Generate Reports...", self)
         reports_action.triggered.connect(self._generate_reports)
         master_data_menu.addAction(reports_action)
 
-        # References menu
-        references_menu = menubar.addMenu("&References")
+        master_data_menu.addSeparator()
 
+        # Manufacturers/MID management (moved from References menu)
         manufacturers_action = QAction("&Manufacturers/MID...", self)
         manufacturers_action.triggered.connect(self._show_manufacturers_dialog)
-        references_menu.addAction(manufacturers_action)
+        master_data_menu.addAction(manufacturers_action)
+
+        # References menu
+        references_menu = menubar.addMenu("&References")
 
         hts_action = QAction("&HTS Reference...", self)
         hts_action.triggered.connect(self._show_hts_reference_dialog)
@@ -197,40 +207,45 @@ class OCRMillMainWindow(QMainWindow):
         manage_templates_action.triggered.connect(self._show_template_manager)
         templates_menu.addAction(manage_templates_action)
 
-        # Licensing menu
-        licensing_menu = menubar.addMenu("&Licensing")
-
-        license_info_action = QAction("License &Information...", self)
-        license_info_action.triggered.connect(self._show_license_dialog)
-        licensing_menu.addAction(license_info_action)
-
-        licensing_menu.addSeparator()
-
-        self.login_action = QAction("&Login...", self)
-        self.login_action.triggered.connect(self._show_login_dialog)
-        licensing_menu.addAction(self.login_action)
-
-        self.logout_action = QAction("Log&out", self)
-        self.logout_action.triggered.connect(self._logout)
-        self.logout_action.setEnabled(False)
-        licensing_menu.addAction(self.logout_action)
-
-        licensing_menu.addSeparator()
-
-        billing_action = QAction("&Billing Records...", self)
-        billing_action.triggered.connect(self._show_billing_dialog)
-        licensing_menu.addAction(billing_action)
-
-        statistics_action = QAction("&Statistics...", self)
-        statistics_action.triggered.connect(self._show_statistics_dialog)
-        licensing_menu.addAction(statistics_action)
-
-        # Help menu
+        # Help menu (includes licensing items)
         help_menu = menubar.addMenu("&Help")
 
         update_action = QAction("Check for &Updates...", self)
         update_action.triggered.connect(self._check_for_updates)
         help_menu.addAction(update_action)
+
+        help_menu.addSeparator()
+
+        # Activity Log
+        activity_log_action = QAction("&Activity Log...", self)
+        activity_log_action.triggered.connect(self._show_activity_log_dialog)
+        help_menu.addAction(activity_log_action)
+
+        help_menu.addSeparator()
+
+        # Licensing section (moved from separate Licensing menu)
+        license_info_action = QAction("License &Information...", self)
+        license_info_action.triggered.connect(self._show_license_dialog)
+        help_menu.addAction(license_info_action)
+
+        self.login_action = QAction("&Login...", self)
+        self.login_action.triggered.connect(self._show_login_dialog)
+        help_menu.addAction(self.login_action)
+
+        self.logout_action = QAction("Log&out", self)
+        self.logout_action.triggered.connect(self._logout)
+        self.logout_action.setEnabled(False)
+        help_menu.addAction(self.logout_action)
+
+        help_menu.addSeparator()
+
+        billing_action = QAction("&Billing Records...", self)
+        billing_action.triggered.connect(self._show_billing_dialog)
+        help_menu.addAction(billing_action)
+
+        statistics_action = QAction("&Statistics...", self)
+        statistics_action.triggered.connect(self._show_statistics_dialog)
+        help_menu.addAction(statistics_action)
 
         help_menu.addSeparator()
 
@@ -339,8 +354,10 @@ class OCRMillMainWindow(QMainWindow):
         self.processing_stopped.connect(self._on_processing_stopped)
 
         # Connect invoice tab signals
-        self.invoice_tab.log_message.connect(self._log)
+        # Note: Don't connect log_message to _log - InvoiceProcessingTab._log() already
+        # appends to log_viewer directly. Connecting would cause duplicate log entries.
         self.invoice_tab.files_processed.connect(self._on_files_processed)
+        self.invoice_tab.file_failed.connect(self._on_file_failed)
 
     def _restore_window_state(self):
         """Restore window size and position from config."""
@@ -385,6 +402,7 @@ class OCRMillMainWindow(QMainWindow):
         # Connect worker signals
         self.processing_worker.log_message.connect(self.invoice_tab.append_log)
         self.processing_worker.files_processed.connect(self._on_files_processed)
+        self.processing_worker.file_failed.connect(self._on_file_failed)
         self.processing_worker.status_changed.connect(self._on_status_changed)
         self.processing_worker.finished.connect(self._on_worker_finished)
 
@@ -441,6 +459,13 @@ class OCRMillMainWindow(QMainWindow):
             # Auto CBP export if enabled
             if self.config.auto_cbp_export:
                 self._run_cbp_export()
+
+    @pyqtSlot(str)
+    def _on_file_failed(self, filename: str):
+        """Handle file processing failure - open Activity Log dialog."""
+        self.status_label.setText(f"Failed: {filename}")
+        # Open Activity Log dialog to show what went wrong
+        self._show_activity_log_dialog()
 
     @pyqtSlot(str)
     def _on_status_changed(self, status: str):
@@ -706,6 +731,11 @@ class OCRMillMainWindow(QMainWindow):
             self.invoice_tab.reload_config()
             self.parts_tab.reload_columns()
 
+    def _show_output_mapping_dialog(self):
+        """Show the output column mapping dialog."""
+        dialog = OutputMappingDialog(self.config, self)
+        dialog.exec()
+
     @pyqtSlot()
     def _change_database_location(self):
         """Change the database file location."""
@@ -970,6 +1000,48 @@ class OCRMillMainWindow(QMainWindow):
             "<p><a href='https://github.com/ProcessLogicLabs/OCRMill'>"
             "GitHub Repository</a></p>"
         )
+
+    @pyqtSlot()
+    def _show_activity_log_dialog(self):
+        """Show the activity log in a dialog."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Activity Log")
+        dialog.setMinimumSize(700, 500)
+
+        layout = QVBoxLayout(dialog)
+
+        # Get the current log text from invoice tab
+        log_text = self.invoice_tab.get_log_text()
+
+        # Create log viewer
+        log_edit = QPlainTextEdit()
+        log_edit.setReadOnly(True)
+        log_edit.setPlainText(log_text)
+        log_edit.setFont(QFont("Consolas", 9))
+
+        # Scroll to bottom
+        cursor = log_edit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        log_edit.setTextCursor(cursor)
+
+        layout.addWidget(log_edit)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+
+        clear_btn = QPushButton("Clear Log")
+        clear_btn.clicked.connect(lambda: (self.invoice_tab.clear_log(), log_edit.clear()))
+        button_layout.addWidget(clear_btn)
+
+        button_layout.addStretch()
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        button_layout.addWidget(close_btn)
+
+        layout.addLayout(button_layout)
+
+        dialog.exec()
 
     # ----- Helper Methods -----
 

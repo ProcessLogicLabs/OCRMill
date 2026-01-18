@@ -9,21 +9,107 @@ Usage:
 """
 
 import sys
+import traceback
+import logging
+from datetime import datetime
 from pathlib import Path
 
 # Ensure the application directory is in the path
 APP_DIR = Path(__file__).parent
 sys.path.insert(0, str(APP_DIR))
 
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import Qt, QTimer, qInstallMessageHandler
 from PyQt6.QtGui import QIcon
 
 from core.theme_manager import get_theme_manager
 
+# Set up crash logging
+CRASH_LOG_PATH = APP_DIR / "crash_log.txt"
+
+def setup_crash_logging():
+    """Set up logging for crash diagnostics."""
+    logging.basicConfig(
+        filename=str(CRASH_LOG_PATH),
+        level=logging.ERROR,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    """
+    Global exception handler to catch unhandled exceptions.
+    Logs the error and shows a message box to the user.
+    """
+    # Don't intercept keyboard interrupt
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    # Format the exception
+    error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Log to file
+    try:
+        with open(CRASH_LOG_PATH, 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"CRASH REPORT - {timestamp}\n")
+            f.write(f"{'='*60}\n")
+            f.write(error_msg)
+            f.write("\n")
+    except Exception:
+        pass  # Fail silently if we can't write to log
+
+    # Log using logging module as well
+    logging.error(f"Unhandled exception:\n{error_msg}")
+
+    # Print to console
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"UNHANDLED EXCEPTION - {timestamp}", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    print(error_msg, file=sys.stderr)
+
+    # Show message box if QApplication exists
+    app = QApplication.instance()
+    if app:
+        try:
+            QMessageBox.critical(
+                None,
+                "OCRMill Error",
+                f"An unexpected error occurred:\n\n{exc_type.__name__}: {exc_value}\n\n"
+                f"Details have been logged to:\n{CRASH_LOG_PATH}\n\n"
+                "The application may be unstable. Please save your work and restart."
+            )
+        except Exception:
+            pass  # Fail silently if we can't show the message box
+
+    # Call the default handler
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+
+def qt_message_handler(mode, context, message):
+    """Handle Qt internal messages for debugging."""
+    if mode == 3:  # QtCriticalMsg or QtFatalMsg
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with open(CRASH_LOG_PATH, 'a', encoding='utf-8') as f:
+                f.write(f"\n[{timestamp}] Qt Critical: {message}\n")
+                if context.file:
+                    f.write(f"  File: {context.file}, Line: {context.line}\n")
+        except Exception:
+            pass
+        print(f"Qt Critical: {message}", file=sys.stderr)
+
 
 def main():
     """Main application entry point."""
+    # Install global exception handler FIRST - catches silent crashes
+    sys.excepthook = global_exception_handler
+    setup_crash_logging()
+
+    # Install Qt message handler for Qt-level errors
+    qInstallMessageHandler(qt_message_handler)
+
     # Enable high DPI scaling
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough

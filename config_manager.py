@@ -389,3 +389,70 @@ class ConfigManager:
             self.config["auth"] = {}
         self.config["auth"]["auto_windows_login"] = value
         self.save()
+
+    # Shared Templates settings
+    @property
+    def shared_templates_folder(self) -> str:
+        """Get the shared templates folder path."""
+        return self.config.get("shared_templates_folder", "")
+
+    @shared_templates_folder.setter
+    def shared_templates_folder(self, value: str):
+        """Set the shared templates folder path."""
+        self.config["shared_templates_folder"] = str(value) if value else ""
+        self.save()
+
+    @property
+    def local_templates_folder(self) -> Path:
+        """Get the local templates folder path."""
+        # Default to AppData location
+        import os
+        app_data = os.environ.get('LOCALAPPDATA', os.path.expanduser('~'))
+        default_path = Path(app_data) / "TariffMill" / "templates"
+        folder = self.config.get("local_templates_folder", str(default_path))
+        return Path(folder)
+
+    @local_templates_folder.setter
+    def local_templates_folder(self, value: str):
+        """Set the local templates folder path."""
+        self.config["local_templates_folder"] = str(value)
+        self.save()
+
+    # Output Column Mapping settings
+    def get_output_column_mapping(self) -> dict:
+        """Get the current output column mapping configuration."""
+        return self.config.get("output_column_mapping", {})
+
+    def set_output_column_mapping(self, mapping: dict):
+        """Set the output column mapping configuration."""
+        self.config["output_column_mapping"] = mapping
+        self.save()
+
+    def get_output_mapping_profiles(self) -> dict:
+        """Get all saved output mapping profiles."""
+        return self.config.get("output_mapping_profiles", {})
+
+    def save_output_mapping_profile(self, name: str, mapping: dict):
+        """Save an output mapping profile."""
+        if "output_mapping_profiles" not in self.config:
+            self.config["output_mapping_profiles"] = {}
+        self.config["output_mapping_profiles"][name] = mapping
+        self.save()
+
+    def delete_output_mapping_profile(self, name: str):
+        """Delete an output mapping profile."""
+        if "output_mapping_profiles" in self.config:
+            if name in self.config["output_mapping_profiles"]:
+                del self.config["output_mapping_profiles"][name]
+                self.save()
+
+    def get_export_option(self, option_name: str, default=None):
+        """Get an export option value."""
+        return self.config.get("export_options", {}).get(option_name, default)
+
+    def set_export_option(self, option_name: str, value):
+        """Set an export option value."""
+        if "export_options" not in self.config:
+            self.config["export_options"] = {}
+        self.config["export_options"][option_name] = value
+        self.save()
