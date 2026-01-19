@@ -434,10 +434,6 @@ class PartsDatabaseTab(QWidget):
         parts_master = self._create_parts_master_tab()
         self.sub_tabs.addTab(parts_master, "Parts Master")
 
-        # Parts Import tab (drag & drop)
-        import_widget = self._create_hts_tab()
-        self.sub_tabs.addTab(import_widget, "Parts Import")
-
         layout.addWidget(self.sub_tabs, 1)
 
     def _create_toolbar(self) -> QHBoxLayout:

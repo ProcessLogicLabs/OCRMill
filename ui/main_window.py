@@ -38,7 +38,7 @@ from licensing.auth_manager import AuthenticationManager
 
 
 # Application version
-VERSION = "0.99.03"
+VERSION = "0.99.04"
 
 
 class OCRMillMainWindow(QMainWindow):
@@ -142,12 +142,6 @@ class OCRMillMainWindow(QMainWindow):
         preferences_action = QAction("&Preferences...", self)
         preferences_action.triggered.connect(self._show_settings_dialog)
         settings_menu.addAction(preferences_action)
-
-        settings_menu.addSeparator()
-
-        db_location_action = QAction("Change &Database Location...", self)
-        db_location_action.triggered.connect(self._change_database_location)
-        settings_menu.addAction(db_location_action)
 
         # Master Data menu
         master_data_menu = menubar.addMenu("&Master Data")

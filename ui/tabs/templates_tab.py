@@ -5,10 +5,15 @@ Combines template management and AI assistant into a single tab interface.
 Replaces the separate template menus and dialogs.
 """
 
+import json
+import logging
 import os
 import sys
 import re
 import shutil
+import urllib.request
+import urllib.error
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -25,6 +30,8 @@ from PyQt6.QtGui import QFont, QColor, QSyntaxHighlighter, QTextCharFormat
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.theme_manager import get_theme_manager
+
+logger = logging.getLogger(__name__)
 
 
 class PythonHighlighter(QSyntaxHighlighter):
@@ -97,6 +104,301 @@ class PythonHighlighter(QSyntaxHighlighter):
                 self.setFormat(start, length, format)
 
 
+class AITemplateChatThread(QThread):
+    """Background thread for AI chat interactions with template assistant."""
+    finished = pyqtSignal(str)  # AI response text
+    error = pyqtSignal(str)
+    stream_update = pyqtSignal(str)  # For streaming responses
+
+    def __init__(self, provider: str, model: str, api_key: str,
+                 current_code: str, user_message: str, conversation_history: list,
+                 invoice_text: str = ""):
+        super().__init__()
+        self.provider = provider
+        self.model = model
+        self.api_key = api_key
+        self.current_code = current_code
+        self.user_message = user_message
+        self.conversation_history = conversation_history
+        self.invoice_text = invoice_text
+        self._cancelled = False
+
+    def cancel(self):
+        """Cancel the current request."""
+        self._cancelled = True
+
+    def run(self):
+        """Run the AI request in background."""
+        try:
+            # Build system prompt with current template context
+            system_prompt = self._build_system_prompt()
+
+            # Build messages list
+            messages = []
+            for msg in self.conversation_history:
+                messages.append(msg)
+            messages.append({"role": "user", "content": self.user_message})
+
+            # Call appropriate provider
+            if self.provider == "Anthropic":
+                result = self._call_anthropic(system_prompt, messages)
+            elif self.provider == "OpenAI":
+                result = self._call_openai(system_prompt, messages)
+            elif self.provider == "Google Gemini":
+                result = self._call_gemini(system_prompt, messages)
+            elif self.provider == "Groq":
+                result = self._call_groq(system_prompt, messages)
+            elif self.provider == "Ollama":
+                result = self._call_ollama(system_prompt, messages)
+            else:
+                raise ValueError(f"Unknown provider: {self.provider}")
+
+            if not self._cancelled:
+                self.finished.emit(result)
+
+        except Exception as e:
+            if not self._cancelled:
+                logger.error(f"AI chat error: {e}")
+                self.error.emit(str(e))
+
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt with template context."""
+        invoice_context = ""
+        if self.invoice_text:
+            invoice_context = f"\n\n## Sample Invoice Text\n```\n{self.invoice_text[:4000]}\n```"
+
+        return f"""You are an expert Python developer and AI assistant for OCRMill, an invoice OCR processing application.
+
+## Application Context
+
+**OCRMill** is an invoice OCR processing application that:
+- Extracts data from PDF invoices using AI-powered OCR
+- Uses customizable Python templates to parse different invoice formats
+- Maps extracted fields (part numbers, quantities, values, descriptions)
+- Templates inherit from BaseTemplate class with extract() method
+
+## Current Template Code
+```python
+{self.current_code}
+```
+{invoice_context}
+
+## Guidelines
+When helping with templates:
+1. Preserve the overall structure (class name, imports, base class)
+2. Only modify the specific parts the user asks about
+3. Return the COMPLETE modified template code wrapped in ```python ... ``` markers
+4. Explain what you changed after the code block
+5. Use regex patterns appropriate for the invoice format
+6. Handle edge cases and missing data gracefully
+
+If the user asks a question, answer it clearly and provide modified code if applicable.
+
+IMPORTANT: When providing code changes, always wrap the COMPLETE template code in:
+```python
+# your complete template code here
+```"""
+
+    def _call_anthropic(self, system_prompt: str, messages: list) -> str:
+        """Call Anthropic Claude API."""
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01"
+        }
+
+        # Convert messages format
+        api_messages = []
+        for msg in messages:
+            api_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        data = {
+            "model": self.model,
+            "max_tokens": 8192,
+            "system": system_prompt,
+            "messages": api_messages
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            return result.get('content', [{}])[0].get('text', '')
+
+    def _call_openai(self, system_prompt: str, messages: list) -> str:
+        """Call OpenAI API."""
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+        # Build messages with system prompt
+        api_messages = [{"role": "system", "content": system_prompt}]
+        for msg in messages:
+            api_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        data = {
+            "model": self.model,
+            "max_tokens": 8192,
+            "messages": api_messages
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            return result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+    def _call_gemini(self, system_prompt: str, messages: list) -> str:
+        """Call Google Gemini API."""
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        # Build contents array
+        contents = []
+        # Add system instruction as first user turn
+        combined_first = system_prompt
+        if messages:
+            combined_first += f"\n\nUser: {messages[0]['content']}"
+            contents.append({
+                "role": "user",
+                "parts": [{"text": combined_first}]
+            })
+            for msg in messages[1:]:
+                role = "user" if msg["role"] == "user" else "model"
+                contents.append({
+                    "role": role,
+                    "parts": [{"text": msg["content"]}]
+                })
+        else:
+            contents.append({
+                "role": "user",
+                "parts": [{"text": combined_first}]
+            })
+
+        data = {
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": 8192
+            }
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            candidates = result.get('candidates', [])
+            if candidates:
+                return candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+            return ''
+
+    def _call_groq(self, system_prompt: str, messages: list) -> str:
+        """Call Groq API (OpenAI-compatible)."""
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+        api_messages = [{"role": "system", "content": system_prompt}]
+        for msg in messages:
+            api_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        data = {
+            "model": self.model,
+            "max_tokens": 8192,
+            "messages": api_messages
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            return result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+    def _call_ollama(self, system_prompt: str, messages: list) -> str:
+        """Call local Ollama API."""
+        url = "http://localhost:11434/api/chat"
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        api_messages = [{"role": "system", "content": system_prompt}]
+        for msg in messages:
+            api_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        data = {
+            "model": self.model,
+            "messages": api_messages,
+            "stream": False
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=300) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                return result.get('message', {}).get('content', '')
+        except urllib.error.URLError as e:
+            if "Connection refused" in str(e) or "No connection" in str(e):
+                raise ConnectionError(
+                    f"Ollama is not running. Please start Ollama first:\n"
+                    f"  1. Install Ollama from https://ollama.ai\n"
+                    f"  2. Run 'ollama serve' in a terminal\n"
+                    f"  3. Run 'ollama pull {self.model}' to download the model"
+                )
+            raise
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise ConnectionError(
+                    f"Ollama model '{self.model}' not found.\n"
+                    f"Please install it by running: ollama pull {self.model}\n\n"
+                    f"Or make sure Ollama is running: ollama serve"
+                )
+            raise
+
+
 class TemplatesTab(QWidget):
     """
     Templates management tab with AI assistant integration.
@@ -114,6 +416,12 @@ class TemplatesTab(QWidget):
         self.templates_data = []
         self.current_template_path = None
         self.current_template_modified = False
+
+        # AI chat state
+        self.conversation_history = []
+        self.chat_thread = None
+        self.pending_code = None
+        self.invoice_text = ""  # Sample invoice text for AI context
 
         self._setup_ui()
         self._apply_theme_styling()
@@ -237,8 +545,8 @@ class TemplatesTab(QWidget):
         header_layout.addWidget(self.ai_provider_combo)
 
         self.ai_model_combo = QComboBox()
-        self.ai_model_combo.addItems(["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"])
-        self.ai_model_combo.setFixedWidth(180)
+        self.ai_model_combo.addItems(["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"])
+        self.ai_model_combo.setFixedWidth(200)
         self.ai_provider_combo.currentTextChanged.connect(self._on_provider_changed)
         header_layout.addWidget(self.ai_model_combo)
 
@@ -322,6 +630,19 @@ class TemplatesTab(QWidget):
         self.context_label.setStyleSheet("color: #888; font-size: 9pt;")
         layout.addWidget(self.context_label)
 
+        # Invoice context button
+        invoice_btn_layout = QHBoxLayout()
+        self.load_invoice_btn = QPushButton("📄 Load Invoice")
+        self.load_invoice_btn.setToolTip("Load a sample invoice PDF to provide context for the AI")
+        self.load_invoice_btn.clicked.connect(self._on_load_invoice_context)
+        invoice_btn_layout.addWidget(self.load_invoice_btn)
+
+        self.invoice_status_label = QLabel("No invoice loaded")
+        self.invoice_status_label.setStyleSheet("color: #888; font-size: 9pt;")
+        invoice_btn_layout.addWidget(self.invoice_status_label)
+        invoice_btn_layout.addStretch()
+        layout.addLayout(invoice_btn_layout)
+
         # Message input
         self.chat_input = QLineEdit()
         self.chat_input.setPlaceholderText("Ask the AI to modify the template... (Enter to send)")
@@ -337,6 +658,7 @@ class TemplatesTab(QWidget):
 
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setEnabled(False)
+        self.cancel_btn.clicked.connect(self._on_cancel_chat)
         chat_btn_layout.addWidget(self.cancel_btn)
 
         self.clear_btn = QPushButton("Clear")
@@ -1048,11 +1370,11 @@ TEMPLATE = {name.title().replace('_', '')}Template
         self.ai_model_combo.clear()
 
         models = {
-            "Anthropic": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
-            "OpenAI": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-            "Google Gemini": ["gemini-1.5-pro", "gemini-1.5-flash"],
-            "Groq": ["llama-3.1-70b-versatile", "llama-3.1-8b-instant"],
-            "Ollama": ["llama3.2", "codellama", "mistral"],
+            "Anthropic": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+            "OpenAI": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4"],
+            "Google Gemini": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
+            "Groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+            "Ollama": ["llama3.2", "codellama", "mistral", "qwen2.5-coder"],
         }
 
         self.ai_model_combo.addItems(models.get(provider, ["default"]))
@@ -1063,22 +1385,273 @@ TEMPLATE = {name.title().replace('_', '')}Template
         if not message:
             return
 
-        # Add user message to chat
-        self.chat_display.append(f"<b>You:</b> {message}")
+        # Get API key from config
+        provider = self.ai_provider_combo.currentText()
+        api_key = self._get_api_key(provider)
+
+        if not api_key:
+            QMessageBox.warning(
+                self, "API Key Required",
+                f"Please configure your {provider} API key in Settings > AI Configuration."
+            )
+            return
+
+        # Check if we have a template loaded
+        current_code = self.code_editor.toPlainText()
+        if not current_code.strip():
+            QMessageBox.warning(
+                self, "No Template",
+                "Please select or create a template first."
+            )
+            return
+
+        # Add user message to display
+        self._append_user_message(message)
         self.chat_input.clear()
 
-        # TODO: Implement AI chat functionality
-        # For now, show a placeholder response
+        # Disable send, enable cancel
+        self.send_btn.setEnabled(False)
+        self.cancel_btn.setEnabled(True)
+
+        # Start AI request in background
+        self.chat_thread = AITemplateChatThread(
+            provider=provider,
+            model=self.ai_model_combo.currentText(),
+            api_key=api_key,
+            current_code=current_code,
+            user_message=message,
+            conversation_history=self.conversation_history.copy(),
+            invoice_text=self.invoice_text
+        )
+        self.chat_thread.finished.connect(self._on_ai_response)
+        self.chat_thread.error.connect(self._on_ai_error)
+        self.chat_thread.start()
+
+        # Add to conversation history
+        self.conversation_history.append({"role": "user", "content": message})
+
+    def _get_api_key(self, provider: str) -> str:
+        """Get API key for the specified provider."""
+        # Try database config first
+        key_map = {
+            "Anthropic": "anthropic_api_key",
+            "OpenAI": "openai_api_key",
+            "Google Gemini": "gemini_api_key",
+            "Groq": "groq_api_key",
+            "Ollama": None  # Ollama doesn't need API key
+        }
+
+        config_key = key_map.get(provider)
+
+        if provider == "Ollama":
+            return "local"  # Ollama runs locally
+
+        if config_key:
+            try:
+                api_key = self.db.get_app_config(config_key)
+                if api_key:
+                    return api_key
+            except Exception:
+                pass
+
+        # Fall back to environment variables
+        env_map = {
+            "Anthropic": "ANTHROPIC_API_KEY",
+            "OpenAI": "OPENAI_API_KEY",
+            "Google Gemini": "GOOGLE_API_KEY",
+            "Groq": "GROQ_API_KEY",
+        }
+
+        env_key = env_map.get(provider)
+        if env_key:
+            return os.environ.get(env_key, "")
+
+        return ""
+
+    def _append_user_message(self, message: str):
+        """Add a user message to the chat display."""
+        is_dark = self.theme_manager.is_dark_theme()
+        user_color = "#61afef" if is_dark else "#0066cc"
         self.chat_display.append(
-            "<b>AI:</b> <i>AI chat functionality coming soon. "
-            "Use the AI Template Generator dialog for now.</i>\n"
+            f'<p style="margin: 8px 0;"><span style="color: {user_color}; font-weight: bold;">You:</span> {message}</p>'
+        )
+        self.chat_display.verticalScrollBar().setValue(
+            self.chat_display.verticalScrollBar().maximum()
         )
 
+    def _append_ai_message(self, message: str):
+        """Add an AI message to the chat display."""
+        is_dark = self.theme_manager.is_dark_theme()
+        ai_color = "#98c379" if is_dark else "#008800"
+        # Convert markdown code blocks to HTML
+        formatted = self._format_ai_message(message)
+        self.chat_display.append(
+            f'<p style="margin: 8px 0;"><span style="color: {ai_color}; font-weight: bold;">AI:</span></p>{formatted}'
+        )
+        self.chat_display.verticalScrollBar().setValue(
+            self.chat_display.verticalScrollBar().maximum()
+        )
+
+    def _format_ai_message(self, message: str) -> str:
+        """Format AI message with code highlighting."""
+        is_dark = self.theme_manager.is_dark_theme()
+        code_bg = "#1e1e1e" if is_dark else "#f5f5f5"
+        code_color = "#d4d4d4" if is_dark else "#333333"
+
+        # Replace code blocks with styled HTML
+        def replace_code_block(match):
+            code = match.group(1)
+            return f'<pre style="background-color: {code_bg}; color: {code_color}; padding: 10px; border-radius: 4px; overflow-x: auto; font-family: Consolas, monospace; font-size: 9pt;">{code}</pre>'
+
+        # Handle ```python ... ``` blocks
+        formatted = re.sub(
+            r'```(?:python)?\s*(.*?)\s*```',
+            replace_code_block,
+            message,
+            flags=re.DOTALL
+        )
+
+        # Handle inline code
+        inline_bg = "#2d2d2d" if is_dark else "#e8e8e8"
+        formatted = re.sub(
+            r'`([^`]+)`',
+            f'<code style="background-color: {inline_bg}; padding: 2px 4px; border-radius: 3px;">\1</code>',
+            formatted
+        )
+
+        # Convert newlines to <br> for non-code text
+        formatted = formatted.replace('\n', '<br>')
+
+        return formatted
+
+    def _append_system_message(self, message: str):
+        """Add a system message to the chat display."""
+        is_dark = self.theme_manager.is_dark_theme()
+        sys_color = "#888888" if is_dark else "#666666"
+        self.chat_display.append(
+            f'<p style="margin: 4px 0; color: {sys_color}; font-style: italic; font-size: 9pt;">{message}</p>'
+        )
+        self.chat_display.verticalScrollBar().setValue(
+            self.chat_display.verticalScrollBar().maximum()
+        )
+
+    def _on_ai_response(self, response: str):
+        """Handle AI response."""
+        self.send_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(False)
+
+        # Add to conversation history
+        self.conversation_history.append({"role": "assistant", "content": response})
+
+        # Check for code block in response
+        code_match = re.search(r'```python\s*(.*?)\s*```', response, re.DOTALL)
+
+        if code_match:
+            extracted_code = code_match.group(1).strip()
+            self.pending_code = extracted_code
+
+            # Show response without the code block (replaced with indicator)
+            display_response = re.sub(
+                r'```python\s*.*?\s*```',
+                '[Code block extracted - click "Apply Code" to apply]',
+                response,
+                flags=re.DOTALL
+            )
+            self._append_ai_message(display_response)
+            self._append_system_message("Code changes ready. Click 'Apply Code' to apply them to the editor.")
+            self.apply_code_btn.setEnabled(True)
+        else:
+            self._append_ai_message(response)
+            self.pending_code = None
+            self.apply_code_btn.setEnabled(False)
+
+    def _on_ai_error(self, error: str):
+        """Handle AI error."""
+        self.send_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(False)
+
+        is_dark = self.theme_manager.is_dark_theme()
+        error_color = "#f14c4c" if is_dark else "#cc0000"
+        self.chat_display.append(
+            f'<p style="color: {error_color}; margin: 8px 0;"><b>Error:</b> {error}</p>'
+        )
+
+    def _on_cancel_chat(self):
+        """Cancel the current AI request."""
+        if self.chat_thread and self.chat_thread.isRunning():
+            self.chat_thread.cancel()
+            self.chat_thread.wait(1000)
+            self._append_system_message("Request cancelled.")
+
+        self.send_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(False)
+
+    def _on_load_invoice_context(self):
+        """Load a sample invoice PDF to provide context for AI."""
+        pdf_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Sample Invoice PDF", "", "PDF Files (*.pdf)"
+        )
+
+        if not pdf_path:
+            return
+
+        try:
+            import pdfplumber
+            with pdfplumber.open(pdf_path) as pdf:
+                text_parts = []
+                for page in pdf.pages[:5]:  # Limit to first 5 pages
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_parts.append(page_text)
+
+                self.invoice_text = "\n".join(text_parts)
+
+                # Update status label
+                file_name = Path(pdf_path).name
+                char_count = len(self.invoice_text)
+                self.invoice_status_label.setText(f"✓ {file_name} ({char_count:,} chars)")
+                self.invoice_status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+
+                self._append_system_message(f"Loaded invoice: {file_name} ({char_count:,} characters)")
+
+        except ImportError:
+            QMessageBox.warning(
+                self, "pdfplumber Not Installed",
+                "Install pdfplumber to load PDF invoices:\npip install pdfplumber"
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to load invoice:\n{e}")
+
     def _on_clear_chat(self):
-        """Clear the chat display."""
+        """Clear the chat display and conversation history."""
         self.chat_display.clear()
+        self.conversation_history = []
+        self.pending_code = None
+        self.apply_code_btn.setEnabled(False)
 
     def _on_apply_code(self):
         """Apply AI-suggested code to the editor."""
-        # TODO: Parse code from AI response and apply
-        pass
+        if not self.pending_code:
+            return
+
+        # Validate syntax before applying
+        try:
+            compile(self.pending_code, '<ai_code>', 'exec')
+        except SyntaxError as e:
+            reply = QMessageBox.question(
+                self, "Syntax Error",
+                f"The AI-generated code has a syntax error on line {e.lineno}.\n"
+                f"Apply anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        # Apply code to editor
+        self.code_editor.setPlainText(self.pending_code)
+        self.current_template_modified = True
+
+        self._append_system_message("Code applied to editor.")
+        self.pending_code = None
+        self.apply_code_btn.setEnabled(False)
+        self._validate_code()

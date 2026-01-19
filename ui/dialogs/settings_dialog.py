@@ -550,10 +550,19 @@ class SettingsDialog(QDialog):
                     border: 1px solid #ccc;
                     border-radius: 3px;
                     background-color: white;
+                    color: #333;
                 }
 
                 QComboBox:focus {
                     border-color: #5f9ea0;
+                }
+
+                QComboBox QAbstractItemView {
+                    background-color: white;
+                    color: #333;
+                    selection-background-color: #5f9ea0;
+                    selection-color: white;
+                    border: 1px solid #ccc;
                 }
 
                 QSpinBox {
@@ -709,39 +718,565 @@ class SettingsDialog(QDialog):
         return page
 
     def _create_ai_provider_page(self) -> QWidget:
-        """Create the AI Provider settings page."""
+        """Create the AI Provider settings page - TariffMill style."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setSpacing(15)
 
-        title = QLabel("AI Provider")
+        title = QLabel("AI Provider Settings")
         title.setStyleSheet("font-size: 16pt; font-weight: bold; color: #333;")
         layout.addWidget(title)
 
-        # AI Provider group
-        ai_group = QGroupBox("AI Template Generation")
-        ai_layout = QFormLayout(ai_group)
-
+        # Info label
         info_label = QLabel(
-            "Configure the AI provider used for template generation.\n"
-            "Currently supports OpenAI and Anthropic Claude."
+            "Configure AI providers for the Template Generator. API keys are stored securely in the\n"
+            "local database."
         )
         info_label.setStyleSheet("color: #666; font-size: 9pt;")
-        ai_layout.addRow("", info_label)
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
 
-        self.ai_provider_combo = QComboBox()
-        self.ai_provider_combo.addItems(["OpenAI", "Anthropic Claude", "Local (Ollama)"])
-        ai_layout.addRow("Provider:", self.ai_provider_combo)
+        # Create scroll area for provider sections
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout(scroll_widget)
+        scroll_layout.setSpacing(10)
 
-        self.ai_api_key_edit = QLineEdit()
-        self.ai_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.ai_api_key_edit.setPlaceholderText("Enter API key...")
-        ai_layout.addRow("API Key:", self.ai_api_key_edit)
+        # Store provider widgets for reference
+        self.ai_provider_widgets = {}
 
-        layout.addWidget(ai_group)
+        # Define providers with their models
+        providers = [
+            {
+                "name": "Anthropic (Claude)",
+                "key": "anthropic",
+                "models": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+                "placeholder": "sk-ant-api03-..."
+            },
+            {
+                "name": "OpenAI (GPT-4)",
+                "key": "openai",
+                "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4"],
+                "placeholder": "sk-..."
+            },
+            {
+                "name": "Google Gemini",
+                "key": "gemini",
+                "models": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
+                "placeholder": "AI..."
+            },
+            {
+                "name": "Groq (Llama, Mixtral)",
+                "key": "groq",
+                "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+                "placeholder": "gsk_..."
+            },
+            {
+                "name": "Ollama (Local)",
+                "key": "ollama",
+                "models": ["llama3.2", "codellama", "mistral", "qwen2.5-coder"],
+                "placeholder": None,  # No API key needed
+                "local": True
+            }
+        ]
 
-        layout.addStretch()
+        for provider in providers:
+            group = QGroupBox(provider["name"])
+            group_layout = QFormLayout(group)
+            group_layout.setSpacing(8)
+
+            widgets = {}
+
+            if provider.get("local"):
+                # Ollama - no API key, just status check
+                info_label = QLabel(
+                    "Ollama runs locally - no API key required.\n"
+                    "Install from ollama.ai, then run: ollama serve"
+                )
+                info_label.setStyleSheet("color: #666; font-size: 9pt;")
+                group_layout.addRow("", info_label)
+
+                # Model selection
+                model_combo = QComboBox()
+                model_combo.addItems(provider["models"])
+                model_combo.setEditable(True)  # Allow custom model names
+                widgets["model"] = model_combo
+                group_layout.addRow("Default Model:", model_combo)
+
+                # Status row
+                status_layout = QHBoxLayout()
+                status_indicator = QLabel("")
+                status_indicator.setStyleSheet("font-size: 9pt;")
+                widgets["status"] = status_indicator
+                status_layout.addWidget(status_indicator)
+                status_layout.addStretch()
+
+                test_btn = QPushButton("Test Connection")
+                test_btn.clicked.connect(lambda checked, k=provider["key"]: self._validate_api_key(k))
+                status_layout.addWidget(test_btn)
+                group_layout.addRow("Status:", status_layout)
+            else:
+                # Cloud provider - needs API key
+                key_edit = QLineEdit()
+                key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+                key_edit.setPlaceholderText(provider["placeholder"])
+                widgets["key"] = key_edit
+                group_layout.addRow("API Key:", key_edit)
+
+                # Model selection
+                model_combo = QComboBox()
+                model_combo.addItems(provider["models"])
+                widgets["model"] = model_combo
+                group_layout.addRow("Default Model:", model_combo)
+
+                # Status row with test button
+                status_layout = QHBoxLayout()
+                status_indicator = QLabel("")
+                status_indicator.setStyleSheet("font-size: 9pt;")
+                widgets["status"] = status_indicator
+                status_layout.addWidget(status_indicator)
+                status_layout.addStretch()
+
+                test_btn = QPushButton("Test Connection")
+                test_btn.clicked.connect(lambda checked, k=provider["key"]: self._validate_api_key(k))
+                status_layout.addWidget(test_btn)
+                group_layout.addRow("Status:", status_layout)
+
+            self.ai_provider_widgets[provider["key"]] = widgets
+            scroll_layout.addWidget(group)
+
+        # Default Settings group
+        default_group = QGroupBox("Default Settings")
+        default_layout = QFormLayout(default_group)
+
+        self.default_provider_combo = QComboBox()
+        self.default_provider_combo.addItems(["Anthropic", "OpenAI", "Google Gemini", "Groq", "Ollama"])
+        default_layout.addRow("Default Provider:", self.default_provider_combo)
+
+        scroll_layout.addWidget(default_group)
+
+        # Save button
+        save_btn = QPushButton("Save AI Settings")
+        save_btn.setObjectName("primaryButton")
+        save_btn.clicked.connect(self._save_ai_settings)
+        scroll_layout.addWidget(save_btn)
+
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_widget)
+        layout.addWidget(scroll)
+
+        # Load saved settings
+        self._load_ai_settings()
+
         return page
+
+    def _load_ai_settings(self):
+        """Load saved AI settings from database."""
+        try:
+            # Load API keys
+            key_map = {
+                "anthropic": "anthropic_api_key",
+                "openai": "openai_api_key",
+                "gemini": "gemini_api_key",
+                "groq": "groq_api_key"
+            }
+
+            for provider_key, config_key in key_map.items():
+                if provider_key in self.ai_provider_widgets:
+                    widgets = self.ai_provider_widgets[provider_key]
+                    if "key" in widgets:
+                        api_key = self.db.get_app_config(config_key) or ''
+                        widgets["key"].setText(api_key)
+
+                        # Update status indicator
+                        if api_key:
+                            widgets["status"].setText("● Key configured - test to verify")
+                            widgets["status"].setStyleSheet("color: #f0b429; font-size: 9pt;")
+                        else:
+                            widgets["status"].setText("○ No API key configured")
+                            widgets["status"].setStyleSheet("color: #888; font-size: 9pt;")
+
+            # Load default models
+            model_map = {
+                "anthropic": "anthropic_default_model",
+                "openai": "openai_default_model",
+                "gemini": "gemini_default_model",
+                "groq": "groq_default_model",
+                "ollama": "ollama_default_model"
+            }
+
+            for provider_key, config_key in model_map.items():
+                if provider_key in self.ai_provider_widgets:
+                    widgets = self.ai_provider_widgets[provider_key]
+                    if "model" in widgets:
+                        saved_model = self.db.get_app_config(config_key)
+                        if saved_model:
+                            idx = widgets["model"].findText(saved_model)
+                            if idx >= 0:
+                                widgets["model"].setCurrentIndex(idx)
+                            elif widgets["model"].isEditable():
+                                widgets["model"].setCurrentText(saved_model)
+
+            # Load default provider
+            default_provider = self.db.get_app_config('default_ai_provider') or 'Anthropic'
+            idx = self.default_provider_combo.findText(default_provider)
+            if idx >= 0:
+                self.default_provider_combo.setCurrentIndex(idx)
+
+            # Check Ollama status
+            if "ollama" in self.ai_provider_widgets:
+                widgets = self.ai_provider_widgets["ollama"]
+                widgets["status"].setText("○ Click Test Connection to check")
+                widgets["status"].setStyleSheet("color: #888; font-size: 9pt;")
+
+        except Exception as e:
+            logging.warning(f"Failed to load AI settings: {e}")
+
+    def _save_ai_settings(self):
+        """Save AI settings to database."""
+        try:
+            # Save API keys
+            key_map = {
+                "anthropic": "anthropic_api_key",
+                "openai": "openai_api_key",
+                "gemini": "gemini_api_key",
+                "groq": "groq_api_key"
+            }
+
+            for provider_key, config_key in key_map.items():
+                if provider_key in self.ai_provider_widgets:
+                    widgets = self.ai_provider_widgets[provider_key]
+                    if "key" in widgets:
+                        self.db.set_app_config(config_key, widgets["key"].text().strip())
+
+            # Save default models
+            model_map = {
+                "anthropic": "anthropic_default_model",
+                "openai": "openai_default_model",
+                "gemini": "gemini_default_model",
+                "groq": "groq_default_model",
+                "ollama": "ollama_default_model"
+            }
+
+            for provider_key, config_key in model_map.items():
+                if provider_key in self.ai_provider_widgets:
+                    widgets = self.ai_provider_widgets[provider_key]
+                    if "model" in widgets:
+                        self.db.set_app_config(config_key, widgets["model"].currentText())
+
+            # Save default provider
+            self.db.set_app_config('default_ai_provider', self.default_provider_combo.currentText())
+
+            QMessageBox.information(self, "Saved", "AI settings saved successfully.")
+
+        except Exception as e:
+            logging.warning(f"Failed to save AI settings: {e}")
+            QMessageBox.warning(self, "Error", f"Failed to save settings:\n{e}")
+
+    def _validate_api_key(self, provider_key: str):
+        """Validate an API key by making a test request."""
+        import json
+        import urllib.request
+        import urllib.error
+
+        if provider_key not in self.ai_provider_widgets:
+            return
+
+        widgets = self.ai_provider_widgets[provider_key]
+        status_label = widgets.get("status")
+        if not status_label:
+            return
+
+        status_label.setText("● Validating...")
+        status_label.setStyleSheet("color: #888; font-size: 9pt;")
+        QApplication.processEvents()
+
+        try:
+            if provider_key == "ollama":
+                # Check if Ollama is running
+                req = urllib.request.Request("http://localhost:11434/api/tags")
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    result = json.loads(response.read().decode('utf-8'))
+                    models = result.get('models', [])
+                    if models:
+                        status_label.setText(f"● Connected ({len(models)} models available)")
+                    else:
+                        status_label.setText("● Connected (no models installed)")
+                    status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+                return
+
+            # Get API key
+            api_key = widgets.get("key", QLineEdit()).text().strip()
+            if not api_key:
+                status_label.setText("○ No API key configured")
+                status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+                return
+
+            # Get selected model
+            model = widgets.get("model", QComboBox()).currentText()
+
+            # Test API calls for each provider
+            if provider_key == "anthropic":
+                url = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                data = {
+                    "model": model or "claude-3-5-haiku-20241022",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "Hi"}]
+                }
+
+            elif provider_key == "openai":
+                url = "https://api.openai.com/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                data = {
+                    "model": model or "gpt-4o-mini",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "Hi"}]
+                }
+
+            elif provider_key == "gemini":
+                test_model = model or "gemini-1.5-flash"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{test_model}:generateContent?key={api_key}"
+                headers = {"Content-Type": "application/json"}
+                data = {
+                    "contents": [{"role": "user", "parts": [{"text": "Hi"}]}],
+                    "generationConfig": {"maxOutputTokens": 10}
+                }
+
+            elif provider_key == "groq":
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                data = {
+                    "model": model or "llama-3.1-8b-instant",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "Hi"}]
+                }
+            else:
+                return
+
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(data).encode('utf-8'),
+                headers=headers,
+                method='POST'
+            )
+
+            with urllib.request.urlopen(req, timeout=30) as response:
+                status_label.setText("● API key valid")
+                status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                status_label.setText("● Invalid API key")
+            elif e.code == 403:
+                status_label.setText("● Access denied")
+            elif e.code == 429:
+                status_label.setText("● Valid (rate limited)")
+                status_label.setStyleSheet("color: #f0b429; font-size: 9pt;")
+                return
+            else:
+                status_label.setText(f"● Error {e.code}")
+            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+
+        except urllib.error.URLError as e:
+            if provider_key == "ollama":
+                status_label.setText("● Ollama not running")
+            else:
+                status_label.setText("● Network error")
+            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+
+        except Exception as e:
+            status_label.setText("● Connection error")
+            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+            logging.warning(f"API validation error for {provider_key}: {e}")
+
+    def _load_api_keys(self):
+        """Load saved API keys from database."""
+        try:
+            anthropic_key = self.db.get_app_config('anthropic_api_key') or ''
+            openai_key = self.db.get_app_config('openai_api_key') or ''
+            gemini_key = self.db.get_app_config('gemini_api_key') or ''
+            groq_key = self.db.get_app_config('groq_api_key') or ''
+
+            self.anthropic_key_edit.setText(anthropic_key)
+            self.openai_key_edit.setText(openai_key)
+            self.gemini_key_edit.setText(gemini_key)
+            self.groq_key_edit.setText(groq_key)
+
+            # Update status indicators for configured keys
+            if anthropic_key:
+                self.anthropic_status_label.setText("✓ Configured")
+                self.anthropic_status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+            if openai_key:
+                self.openai_status_label.setText("✓ Configured")
+                self.openai_status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+            if gemini_key:
+                self.gemini_status_label.setText("✓ Configured")
+                self.gemini_status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+            if groq_key:
+                self.groq_status_label.setText("✓ Configured")
+                self.groq_status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+
+        except Exception as e:
+            logging.warning(f"Failed to load API keys: {e}")
+
+    def _save_api_keys(self):
+        """Save API keys to database."""
+        try:
+            self.db.set_app_config('anthropic_api_key', self.anthropic_key_edit.text().strip())
+            self.db.set_app_config('openai_api_key', self.openai_key_edit.text().strip())
+            self.db.set_app_config('gemini_api_key', self.gemini_key_edit.text().strip())
+            self.db.set_app_config('groq_api_key', self.groq_key_edit.text().strip())
+        except Exception as e:
+            logging.warning(f"Failed to save API keys: {e}")
+
+    def _validate_api_key(self, provider: str):
+        """Validate an API key by making a test request."""
+        import json
+        import urllib.request
+        import urllib.error
+
+        status_labels = {
+            "Anthropic": self.anthropic_status_label,
+            "OpenAI": self.openai_status_label,
+            "Google Gemini": self.gemini_status_label,
+            "Groq": self.groq_status_label,
+            "Ollama": self.ollama_status_label,
+        }
+
+        key_edits = {
+            "Anthropic": self.anthropic_key_edit,
+            "OpenAI": self.openai_key_edit,
+            "Google Gemini": self.gemini_key_edit,
+            "Groq": self.groq_key_edit,
+        }
+
+        status_label = status_labels.get(provider)
+        if not status_label:
+            return
+
+        status_label.setText("Validating...")
+        status_label.setStyleSheet("color: #888; font-size: 9pt;")
+        QApplication.processEvents()
+
+        try:
+            if provider == "Ollama":
+                # Check if Ollama is running
+                req = urllib.request.Request("http://localhost:11434/api/tags")
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    result = json.loads(response.read().decode('utf-8'))
+                    models = result.get('models', [])
+                    if models:
+                        model_names = [m.get('name', '') for m in models[:3]]
+                        status_label.setText(f"✓ Running ({len(models)} models)")
+                    else:
+                        status_label.setText("✓ Running (no models)")
+                    status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+                return
+
+            api_key = key_edits[provider].text().strip()
+            if not api_key:
+                status_label.setText("✗ No key")
+                status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+                return
+
+            # Test API calls for each provider
+            if provider == "Anthropic":
+                url = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                data = {
+                    "model": "claude-3-5-haiku-20241022",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "Hi"}]
+                }
+
+            elif provider == "OpenAI":
+                url = "https://api.openai.com/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                data = {
+                    "model": "gpt-4o-mini",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "Hi"}]
+                }
+
+            elif provider == "Google Gemini":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                headers = {"Content-Type": "application/json"}
+                data = {
+                    "contents": [{"role": "user", "parts": [{"text": "Hi"}]}],
+                    "generationConfig": {"maxOutputTokens": 10}
+                }
+
+            elif provider == "Groq":
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                data = {
+                    "model": "llama-3.1-8b-instant",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "Hi"}]
+                }
+
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(data).encode('utf-8'),
+                headers=headers,
+                method='POST'
+            )
+
+            with urllib.request.urlopen(req, timeout=30) as response:
+                status_label.setText("✓ Valid")
+                status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
+
+                # Save the validated key
+                self._save_api_keys()
+
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                status_label.setText("✗ Invalid key")
+            elif e.code == 403:
+                status_label.setText("✗ Access denied")
+            elif e.code == 429:
+                status_label.setText("✓ Valid (rate limited)")
+                status_label.setStyleSheet("color: #f0b429; font-size: 9pt;")
+                self._save_api_keys()
+                return
+            else:
+                status_label.setText(f"✗ Error {e.code}")
+            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+
+        except urllib.error.URLError as e:
+            if provider == "Ollama":
+                status_label.setText("✗ Not running")
+            else:
+                status_label.setText("✗ Network error")
+            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+
+        except Exception as e:
+            status_label.setText("✗ Error")
+            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
+            logging.warning(f"API validation error for {provider}: {e}")
 
     def _create_templates_page(self) -> QWidget:
         """Create the Templates settings page - TariffMill style."""

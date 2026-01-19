@@ -74,19 +74,15 @@ class ConfigurationDialog(QDialog):
         self.tab_widget.setDocumentMode(True)
         self.tabs = self.tab_widget  # Alias for backward compatibility
 
-        # Tab 1: Invoice Mapping Profiles
-        self.invoice_mapping_tab = self._create_invoice_mapping_tab()
-        self.tabs.addTab(self.invoice_mapping_tab, "Invoice Mapping Profiles")
-
-        # Tab 2: Output Mapping (TariffMill style)
+        # Tab 1: Output Mapping (TariffMill style)
         self.output_mapping_tab = self._create_output_mapping_tab()
         self.tabs.addTab(self.output_mapping_tab, "Output Mapping")
 
-        # Tab 3: Parts Import (TariffMill style)
+        # Tab 2: Parts Import (TariffMill style)
         self.parts_import_tab = self._create_parts_import_tab()
         self.tabs.addTab(self.parts_import_tab, "Parts Import")
 
-        # Tab 4: MID Management
+        # Tab 3: MID Management
         self.mid_tab = self._create_mid_management_tab()
         self.tabs.addTab(self.mid_tab, "MID Management")
 
@@ -105,159 +101,6 @@ class ConfigurationDialog(QDialog):
         layout.addLayout(btn_layout)
 
     # ========== INVOICE MAPPING PROFILES TAB ==========
-
-    def _create_invoice_mapping_tab(self) -> QWidget:
-        """Create the Invoice Mapping Profiles tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        # Title
-        title = QLabel("Invoice Mapping Profiles")
-        title.setStyleSheet("font-size: 18pt; font-weight: bold;")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
-
-        subtitle = QLabel("Save and load column mappings")
-        subtitle.setStyleSheet("color: #666;")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(subtitle)
-
-        # Profile selection row
-        profile_layout = QHBoxLayout()
-
-        profile_layout.addWidget(QLabel("Saved Profiles:"))
-        self.invoice_profile_combo = QComboBox()
-        self.invoice_profile_combo.setMinimumWidth(200)
-        self.invoice_profile_combo.addItem("-- Select Profile --")
-        profile_layout.addWidget(self.invoice_profile_combo)
-
-        profile_layout.addWidget(QLabel("Header Row:"))
-        self.header_row_spin = QSpinBox()
-        self.header_row_spin.setRange(1, 100)
-        self.header_row_spin.setValue(1)
-        self.header_row_spin.setFixedWidth(60)
-        profile_layout.addWidget(self.header_row_spin)
-
-        load_file_btn = QPushButton("Load Invoice File")
-        load_file_btn.clicked.connect(self._load_invoice_file)
-        profile_layout.addWidget(load_file_btn)
-
-        reset_btn = QPushButton("Reset Current")
-        reset_btn.clicked.connect(self._reset_invoice_mapping)
-        profile_layout.addWidget(reset_btn)
-
-        save_btn = QPushButton("Save Current Mapping As...")
-        save_btn.clicked.connect(self._save_invoice_mapping)
-        profile_layout.addWidget(save_btn)
-
-        delete_btn = QPushButton("Delete Profile")
-        delete_btn.clicked.connect(self._delete_invoice_profile)
-        profile_layout.addWidget(delete_btn)
-
-        layout.addLayout(profile_layout)
-
-        # Linked Export Profile
-        link_layout = QHBoxLayout()
-        link_layout.addWidget(QLabel("Linked Export Profile:"))
-        self.linked_export_combo = QComboBox()
-        self.linked_export_combo.setMinimumWidth(200)
-        self.linked_export_combo.addItem("(None)")
-        link_layout.addWidget(self.linked_export_combo)
-
-        save_link_btn = QPushButton("Save Link")
-        save_link_btn.clicked.connect(self._save_profile_link)
-        link_layout.addWidget(save_link_btn)
-
-        clear_link_btn = QPushButton("Clear Link")
-        clear_link_btn.clicked.connect(self._clear_profile_link)
-        link_layout.addWidget(clear_link_btn)
-
-        link_layout.addStretch()
-        layout.addLayout(link_layout)
-
-        # Main mapping area - 3 columns
-        mapping_widget = QWidget()
-        mapping_layout = QHBoxLayout(mapping_widget)
-        mapping_layout.setSpacing(15)
-
-        # Left: Your CSV Columns - Drag
-        left_group = QGroupBox("Your CSV Columns - Drag")
-        left_layout = QVBoxLayout(left_group)
-
-        self.csv_columns_list = QListWidget()
-        self.csv_columns_list.setDragEnabled(True)
-        self.csv_columns_list.setDefaultDropAction(Qt.DropAction.CopyAction)
-        left_layout.addWidget(self.csv_columns_list)
-
-        mapping_layout.addWidget(left_group)
-
-        # Middle: Required Fields - Drop
-        middle_group = QGroupBox("Required Fields - Drop")
-        middle_layout = QVBoxLayout(middle_group)
-
-        middle_scroll = QScrollArea()
-        middle_scroll.setWidgetResizable(True)
-        middle_scroll.setFrameShape(QFrame.Shape.NoFrame)
-
-        middle_widget = QWidget()
-        self.required_fields_layout = QFormLayout(middle_widget)
-        self.required_fields_layout.setSpacing(10)
-
-        # Required fields
-        self.required_targets = {}
-        required_fields = [
-            ("part_number", "Part Number *"),
-            ("value_usd", "Value USD *"),
-        ]
-
-        for field_key, label in required_fields:
-            target = DropTargetLabel(field_key, f"Drop {label} here")
-            self.required_targets[field_key] = target
-            self.required_fields_layout.addRow(f"{label}:", target)
-
-        middle_scroll.setWidget(middle_widget)
-        middle_layout.addWidget(middle_scroll)
-
-        mapping_layout.addWidget(middle_group)
-
-        # Right: Optional Fields - Drop
-        right_group = QGroupBox("Optional Fields - Drop")
-        right_layout = QVBoxLayout(right_group)
-
-        right_scroll = QScrollArea()
-        right_scroll.setWidgetResizable(True)
-        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
-
-        right_widget = QWidget()
-        self.optional_fields_layout = QFormLayout(right_widget)
-        self.optional_fields_layout.setSpacing(10)
-
-        # Optional fields
-        self.optional_targets = {}
-        optional_fields = [
-            ("invoice_number", "Invoice Number"),
-            ("quantity", "Quantity"),
-            ("quantity_unit", "Quantity Unit"),
-            ("net_weight", "Net Weight"),
-            ("hts_code", "HTS Code"),
-            ("qty_unit", "Qty Unit"),
-        ]
-
-        for field_key, label in optional_fields:
-            target = DropTargetLabel(field_key, f"Drop {label} here")
-            self.optional_targets[field_key] = target
-            self.optional_fields_layout.addRow(f"{label}:", target)
-
-        right_scroll.setWidget(right_widget)
-        right_layout.addWidget(right_scroll)
-
-        mapping_layout.addWidget(right_group)
-
-        layout.addWidget(mapping_widget, 1)
-
-        return widget
 
     # ========== OUTPUT MAPPING TAB (TariffMill Style) ==========
 

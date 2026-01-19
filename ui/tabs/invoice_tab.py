@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox,
     QFrame, QGridLayout, QSplitter, QRadioButton, QButtonGroup,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QScrollArea, QApplication
+    QScrollArea, QApplication, QComboBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer
 from PyQt6.QtGui import QColor
@@ -726,6 +726,27 @@ class InvoiceProcessingTab(QWidget):
 
         self.split_radio.toggled.connect(self._save_multi_invoice_mode)
 
+        # Separator line
+        line4 = QFrame()
+        line4.setFrameShape(QFrame.Shape.HLine)
+        line4.setStyleSheet("background-color: #ccc;")
+        actions_layout.addWidget(line4)
+
+        # Output Mapping Profile selector
+        mapping_label = QLabel("Output Mapping Profile:")
+        actions_layout.addWidget(mapping_label)
+
+        self.mapping_profile_combo = QComboBox()
+        self.mapping_profile_combo.setToolTip(
+            "Select which output mapping profile to use when exporting CSVs.\n"
+            "Profiles control which columns are exported and their order."
+        )
+        self.mapping_profile_combo.currentTextChanged.connect(self._on_mapping_profile_changed)
+        actions_layout.addWidget(self.mapping_profile_combo)
+
+        # Refresh profiles list
+        self._refresh_mapping_profiles()
+
         layout.addWidget(actions_group)
 
         layout.addStretch()
@@ -1088,6 +1109,13 @@ class InvoiceProcessingTab(QWidget):
         # Update auto-start checkbox
         self.auto_start_check.setChecked(self.config.auto_start)
 
+        # Apply saved mapping profile on startup
+        saved_profile = self.config.get_export_option('selected_mapping_profile', 'Default')
+        if saved_profile and saved_profile != 'Default':
+            profiles = self.config.get_output_mapping_profiles()
+            if saved_profile in profiles:
+                self.config.set_output_column_mapping(profiles[saved_profile])
+
         # Refresh file lists
         self._refresh_input_files()
         self._refresh_output_files()
@@ -1095,6 +1123,7 @@ class InvoiceProcessingTab(QWidget):
     def reload_config(self):
         """Reload configuration after settings change."""
         self._load_config()
+        self._refresh_mapping_profiles()
         self.engine = ProcessorEngine(self.config, self.db, log_callback=self._log)
 
     # ----- Settings handlers -----
@@ -1115,6 +1144,63 @@ class InvoiceProcessingTab(QWidget):
     def _save_template_enabled(self, name: str, state: int):
         """Save template enabled state."""
         self.config.set_template_enabled(name, state == Qt.CheckState.Checked.value)
+
+    def _refresh_mapping_profiles(self):
+        """Refresh the output mapping profile dropdown."""
+        # Block signals to prevent triggering change handler during refresh
+        self.mapping_profile_combo.blockSignals(True)
+
+        current_selection = self.mapping_profile_combo.currentText()
+        self.mapping_profile_combo.clear()
+
+        # Add "Default" option
+        self.mapping_profile_combo.addItem("Default")
+
+        # Add saved profiles
+        profiles = self.config.get_output_mapping_profiles()
+        for profile_name in sorted(profiles.keys()):
+            self.mapping_profile_combo.addItem(profile_name)
+
+        # Restore previous selection or load saved selection
+        saved_profile = self.config.get_export_option('selected_mapping_profile', 'Default')
+
+        if current_selection:
+            # Try to restore current selection
+            idx = self.mapping_profile_combo.findText(current_selection)
+            if idx >= 0:
+                self.mapping_profile_combo.setCurrentIndex(idx)
+            else:
+                # Current selection no longer exists, fall back to saved
+                idx = self.mapping_profile_combo.findText(saved_profile)
+                self.mapping_profile_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        else:
+            # Initial load - use saved profile
+            idx = self.mapping_profile_combo.findText(saved_profile)
+            self.mapping_profile_combo.setCurrentIndex(idx if idx >= 0 else 0)
+
+        self.mapping_profile_combo.blockSignals(False)
+
+    def _on_mapping_profile_changed(self, profile_name: str):
+        """Handle output mapping profile selection change."""
+        if not profile_name:
+            return
+
+        # Save the selection
+        self.config.set_export_option('selected_mapping_profile', profile_name)
+
+        if profile_name == "Default":
+            # Clear active mapping to use default columns
+            self.config.set_output_column_mapping({})
+            self._log(f"Output mapping: Using default columns")
+        else:
+            # Load and apply the selected profile
+            profiles = self.config.get_output_mapping_profiles()
+            if profile_name in profiles:
+                profile_mapping = profiles[profile_name]
+                self.config.set_output_column_mapping(profile_mapping)
+                self._log(f"Output mapping: {profile_name}")
+            else:
+                self._log(f"Warning: Profile '{profile_name}' not found")
 
     # ----- Processing control -----
 
