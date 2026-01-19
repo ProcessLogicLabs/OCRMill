@@ -228,7 +228,7 @@ Large databases (>100,000 occurrences) may slow down. Consider archiving old dat
 ### 7. Verify HTS Coverage
 Check Statistics tab to see HTS code coverage percentage. Aim for >95%.
 
-## Integration with DerivativeMill
+## Integration with Millworks
 
 ### Workflow
 
@@ -242,13 +242,13 @@ Check Statistics tab to see HTS code coverage percentage. Aim for >95%.
    python ../consolidate_and_match.py
    ```
 
-3. **Import to DerivativeMill**
+3. **Import to Millworks**
    - Import consolidated CSV
    - HTS codes already assigned
    - Material composition data included
 
 4. **Generate Customs Forms**
-   - Use DerivativeMill to calculate tariffs
+   - Use Millworks to calculate tariffs
    - Generate Section 232 forms
 
 ## File Locations

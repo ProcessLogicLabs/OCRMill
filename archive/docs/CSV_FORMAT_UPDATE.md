@@ -78,8 +78,8 @@ Descriptions are stored in parts database for future reference
 
 ## Import Compatibility
 
-### DerivativeMill Integration
-The description column is ignored by DerivativeMill but provides useful context for manual review.
+### Millworks Integration
+The description column is ignored by Millworks but provides useful context for manual review.
 
 ### Excel Import
 When opening CSV in Excel:

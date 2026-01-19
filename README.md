@@ -23,7 +23,7 @@
 - **CSV Output** - Organized output files with extracted line items
 
 ### CBP Integration
-- **CBP Export Tab** - Integrated DerivativeMill processing for customs forms
+- **CBP Export Tab** - Integrated Millworks processing for customs forms
 - **Auto-Refresh** - Automatically refreshes when tab is selected
 - **Section 232 Compliance** - Material composition data for tariff calculations
 - **Qty1/Qty2 Processing** - Conditional quantity handling based on unit type
@@ -246,7 +246,7 @@ Toggle in Settings tab or set in `config.json`.
 - **Project Cleanup** - Archived 48 unused files, organized structure
 
 ### v2.3.0 (December 2025)
-- **CBP Export Integration** - DerivativeMill processing integrated
+- **CBP Export Integration** - Millworks processing integrated
 - **Unified GUI** - Tabbed interface with all features
 
 ### v2.2.0

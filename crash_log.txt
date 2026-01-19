@@ -1,0 +1,117 @@
+
+============================================================
+CRASH REPORT - 2026-01-18 17:16:14
+============================================================
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\input'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\Users\payne\OCRMIll\ocrmill_app.py", line 227, in <module>
+    main()
+  File "c:\Users\payne\OCRMIll\ocrmill_app.py", line 149, in main
+    config = ConfigManager()
+             ^^^^^^^^^^^^^^^
+  File "c:\Users\payne\OCRMIll\config_manager.py", line 86, in __init__
+    self._ensure_directories()
+  File "c:\Users\payne\OCRMIll\config_manager.py", line 121, in _ensure_directories
+    directory.mkdir(parents=True, exist_ok=True)
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1315, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1315, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1315, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+  [Previous line repeated 2 more times]
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+PermissionError: [WinError 5] Access is denied: 'c:\\Users\\hpayne'
+
+2026-01-18 17:16:14,399 - ERROR - Unhandled exception:
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\input'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents\\DevHouston'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+FileNotFoundError: [WinError 3] The system cannot find the path specified: 'c:\\Users\\hpayne\\Documents'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\Users\payne\OCRMIll\ocrmill_app.py", line 227, in <module>
+    main()
+  File "c:\Users\payne\OCRMIll\ocrmill_app.py", line 149, in main
+    config = ConfigManager()
+             ^^^^^^^^^^^^^^^
+  File "c:\Users\payne\OCRMIll\config_manager.py", line 86, in __init__
+    self._ensure_directories()
+  File "c:\Users\payne\OCRMIll\config_manager.py", line 121, in _ensure_directories
+    directory.mkdir(parents=True, exist_ok=True)
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1315, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1315, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1315, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+  [Previous line repeated 2 more times]
+  File "C:\Users\payne\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1311, in mkdir
+    os.mkdir(self, mode)
+PermissionError: [WinError 5] Access is denied: 'c:\\Users\\hpayne'
+

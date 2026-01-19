@@ -1,10 +1,10 @@
 """
 Section 232 Consolidation Script
-Prepares OCR Mill CSV outputs for DerivativeMill Section 232 processing.
+Prepares OCR Mill CSV outputs for Millworks Section 232 processing.
 
 This script:
 1. Consolidates multiple invoice CSVs into a single file
-2. Adds columns required by DerivativeMill
+2. Adds columns required by Millworks
 3. Validates material composition data
 4. Generates a report ready for Section 232 tariff calculations
 """
@@ -178,9 +178,9 @@ def consolidate_invoices(output_folder: Path, output_file: Path):
         print(f"{project}: {len(items)} items across {len(invoices)} invoice(s)")
 
     print(f"\n{'=' * 80}")
-    print("NEXT STEPS: Import into DerivativeMill")
+    print("NEXT STEPS: Import into Millworks")
     print(f"{'=' * 80}")
-    print("1. Open DerivativeMill application")
+    print("1. Open Millworks application")
     print("2. Navigate to Import -> Invoice Data")
     print(f"3. Select file: {output_file.name}")
     print("4. Map columns to parts database")

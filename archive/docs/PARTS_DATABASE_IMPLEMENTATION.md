@@ -92,7 +92,7 @@ python load_hts_mapping.py
 - Reports documentation
 - Common tasks and examples
 - Troubleshooting
-- Integration with DerivativeMill
+- Integration with Millworks
 
 ### 5. `QUICK_START.md` (260+ lines)
 **Purpose:** Quick reference guide
@@ -299,7 +299,7 @@ CREATE INDEX idx_part_occurrences_project ON part_occurrences(project_number)
    ↓
 4. Run consolidate_and_match.py
    ↓
-5. Import to DerivativeMill
+5. Import to Millworks
    ↓
 6. Generate customs forms
 ```

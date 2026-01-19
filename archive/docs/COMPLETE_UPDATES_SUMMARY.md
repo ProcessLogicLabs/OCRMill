@@ -75,13 +75,13 @@
 ### Consolidation Script Created
 **File**: `consolidate_and_match.py`
 
-**Purpose**: Prepare OCR Mill output for DerivativeMill Section 232 processing
+**Purpose**: Prepare OCR Mill output for Millworks Section 232 processing
 
 **Features**:
 1. Consolidates all invoice CSVs into single file
 2. Validates material composition data
 3. Generates statistics by project
-4. Produces import-ready format for DerivativeMill
+4. Produces import-ready format for Millworks
 
 **Usage**:
 ```bash
@@ -115,7 +115,7 @@ python ../consolidate_and_match.py
                     │
                     ▼
 ┌──────────────────────────────────────────────┐
-│ DerivativeMill Application                   │
+│ Millworks Application                   │
 ├──────────────────────────────────────────────┤
 │ 1. Import consolidated CSV                   │
 │ 2. Match parts to HTS codes                  │
@@ -173,7 +173,7 @@ invoice_number,project_number,part_number,quantity,total_price,ncm_code,hts_code
 
 1. **Test with actual Brazilian invoice PDFs** containing material composition data
 2. **Run consolidation script** on output folder
-3. **Import consolidated CSV** into DerivativeMill
+3. **Import consolidated CSV** into Millworks
 4. **Verify Section 232 calculations** match material data
 5. **Generate customs forms** for submission
 

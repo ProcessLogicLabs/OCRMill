@@ -30,7 +30,7 @@ The CBP Export process takes consolidated invoice CSV files and creates separate
 **Process**:
 1. Reads consolidated CSV file (may contain multiple invoices)
 2. Detects `bol_gross_weight` column and uses first value as total shipment weight
-3. Processes through InvoiceProcessor (DerivativeMill):
+3. Processes through InvoiceProcessor (Millworks):
    - Looks up HTS codes in tariff database
    - Calculates Section 232 status (Steel, Aluminum, Non-232, etc.)
    - Prorates total shipment weight across line items by value

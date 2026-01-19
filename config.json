@@ -1,15 +1,15 @@
 {
-  "input_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\input",
-  "output_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\output",
-  "database_path": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\Resources\\parts_database.db",
+  "input_folder": "c:\\Users\\payne\\OCRMIll\\input",
+  "output_folder": "c:\\Users\\payne\\OCRMIll\\output",
+  "database_path": "c:\\Users\\payne\\OCRMIll\\Resources\\parts_database.db",
   "poll_interval": 10,
   "auto_start": false,
   "consolidate_multi_invoice": true,
   "auto_cbp_export": true,
   "check_updates_on_startup": true,
   "cbp_export": {
-    "input_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\output\\Processed",
-    "output_folder": "c:\\Users\\hpayne\\Documents\\DevHouston\\OCRMill\\OCRMill\\output\\CBP_Export"
+    "input_folder": "c:\\Users\\payne\\OCRMIll\\output\\Processed",
+    "output_folder": "c:\\Users\\payne\\OCRMIll\\output\\CBP_Export"
   },
   "templates": {
     "mmcite_czech": {

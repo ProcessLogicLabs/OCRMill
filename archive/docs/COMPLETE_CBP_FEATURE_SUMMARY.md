@@ -80,7 +80,7 @@ Original: part_number=STE110-002000, quantity=6, total_price=493.30
 Enriched: steel_pct=0, aluminum_pct=0, non_steel_pct=100, hts_code=9403.20.0082, mid=CZMMCCAS907UHE
 ```
 
-#### Step 2: Derivative Row Splitting (DerivativeMill)
+#### Step 2: Derivative Row Splitting (Millworks)
 InvoiceProcessor splits each row by material type:
 
 **Input**: 1 row with mixed materials (60% steel, 40% aluminum, value $1000)
@@ -413,7 +413,7 @@ All three country fields use the same value:
 
 - **Implementation Date**: December 14, 2025
 - **OCRMill Version**: v2.3.0
-- **DerivativeMill Version**: Latest (submodule)
+- **Millworks Version**: Latest (submodule)
 - **Features**: BOL extraction, parts database integration, derivative splitting, Section 232 classification
 
 ---

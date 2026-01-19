@@ -99,7 +99,7 @@ for item in items:
 
 ## Next Steps: Section 232 Post-Processing
 
-The CSVs now contain the required data for Section 232 derivative calculations. The DerivativeMill application processes these CSVs to:
+The CSVs now contain the required data for Section 232 derivative calculations. The Millworks application processes these CSVs to:
 
 1. **Match parts to HTS codes** - Links part numbers to tariff classifications
 2. **Calculate steel/aluminum ratios** - Uses weight and value data
@@ -113,7 +113,7 @@ OCR Mill (This System)
 ├── Parse line items with material data
 └── Generate CSV files
     ↓
-DerivativeMill (Section 232 Processing)
+Millworks (Section 232 Processing)
 ├── Import CSV files
 ├── Match to parts database
 ├── Calculate derivative percentages

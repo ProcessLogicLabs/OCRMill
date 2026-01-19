@@ -93,7 +93,7 @@ The zip file contains everything end users need - just extract and run!
 **Missing Data Files**
 - Check the datas section in OCRMill.spec
 - Ensure templates/ folder exists
-- Verify DerivativeMill submodule is present
+- Verify Millworks submodule is present
 
 ### Build Configuration
 
@@ -109,7 +109,7 @@ The build is configured in [OCRMill.spec](OCRMill.spec):
 - parts_database.db - Database
 - templates/ - Invoice templates
 - Resources/ - Additional resources
-- DerivativeMill/ - Invoice processor submodule
+- Millworks/ - Invoice processor submodule
 
 **Hidden Imports:**
 All template modules and dependencies are explicitly listed to ensure

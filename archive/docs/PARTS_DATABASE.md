@@ -546,18 +546,18 @@ for part_row in parts:
 print(f"Rebuilt statistics for {len(parts)} parts")
 ```
 
-## Integration with DerivativeMill
+## Integration with Millworks
 
 The parts database enhances Section 232 processing by:
 
-1. **HTS Code Pre-Assignment**: Parts already have HTS codes before DerivativeMill import
+1. **HTS Code Pre-Assignment**: Parts already have HTS codes before Millworks import
 2. **Historical Data**: Review past HTS assignments for consistency
 3. **Material Composition**: Steel/aluminum data ready for tariff calculations
 4. **Audit Trail**: Complete history of part classifications
 
 **Workflow:**
 ```
-OCRMill → Parts Database → Consolidated CSV → DerivativeMill → Customs Forms
+OCRMill → Parts Database → Consolidated CSV → Millworks → Customs Forms
 ```
 
 The `consolidate_and_match.py` script can query the parts database to enrich consolidated data.

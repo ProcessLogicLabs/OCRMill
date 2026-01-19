@@ -19,10 +19,11 @@
       "Bash(\".venv/Scripts/python.exe\" -c \"\nfrom parts_database import PartsDatabase\ndb = PartsDatabase()\n\nprint(''Testing lookups:'')\ntest_names = [''mmcité'', ''mmcite'', ''MMCITE AS'', ''mmcité s.r.o.'', ''MMCITE BRAZIL'', ''mmcité do Brasil'', ''OUT SIDER'', ''Out Sider AS'']\nfor name in test_names:\n    result = db.get_manufacturer_by_name(name)\n    print(f''  \"\"{name}\"\" -> {result[\"\"mid\"\"] if result else \"\"NOT FOUND\"\"}'')\")",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(python -c \"import sys; sys.path.insert(0, ''DerivativeMill/DerivativeMill''); from invoice_processor import InvoiceProcessor; print(''Import successful'')\")",
+      "Bash(python -c \"import sys; sys.path.insert(0, ''Millworks/Millworks''); from invoice_processor import InvoiceProcessor; print(''Import successful'')\")",
       "Bash(git push:*)",
       "Bash(python test_bol_extraction.py:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(python -m PyInstaller:*)"
     ],
     "deny": [],
     "ask": []

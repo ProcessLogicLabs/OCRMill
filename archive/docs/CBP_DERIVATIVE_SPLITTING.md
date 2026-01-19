@@ -50,7 +50,7 @@ After enrichment:
 
 ### Step 2: Derivative Row Splitting
 
-The InvoiceProcessor (DerivativeMill) splits each row based on material composition:
+The InvoiceProcessor (Millworks) splits each row based on material composition:
 
 **Input**: 1 row with mixed materials
 ```
@@ -222,15 +222,15 @@ All three country fields use the same value unless specifically overridden:
    - Formats material ratios as percentages (e.g., "100%")
    - Logs exported column list
 
-### DerivativeMill Components
+### Millworks Components
 
-1. **DerivativeMill/invoice_processor/core/processor.py**
+1. **Millworks/invoice_processor/core/processor.py**
    - `process_invoice_data()` - Main processing function
    - Expands rows by material content (lines 129-184)
    - Calculates weight proration (lines 188-193)
    - Assigns Section 232 flags (lines 206-261)
 
-2. **DerivativeMill/invoice_processor/core/exporter.py**
+2. **Millworks/invoice_processor/core/exporter.py**
    - `export_to_excel()` - Excel export with color coding
    - Applies material-specific font colors
    - Highlights Section 301 exclusions
@@ -264,7 +264,7 @@ All three country fields use the same value unless specifically overridden:
 ### Issue: "DecTypeCd is empty"
 **Cause**: HTS code not in tariff database or material type unknown
 **Solution**:
-1. Update `derivativemill.db` with missing HTS codes
+1. Update `millworks.db` with missing HTS codes
 2. Or ensure parts database has correct material percentages
 
 ## Related Documentation
@@ -278,5 +278,5 @@ All three country fields use the same value unless specifically overridden:
 
 - **Implementation Date**: December 14, 2025
 - **OCRMill Version**: v2.3.0
-- **DerivativeMill Version**: Latest (submodule)
+- **Millworks Version**: Latest (submodule)
 - **Feature**: Derivative row splitting with Section 232 classification

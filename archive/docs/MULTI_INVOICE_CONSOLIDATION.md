@@ -102,7 +102,7 @@ Processing: PL_US25A0216.pdf
 - ✅ Each invoice needs separate customs forms
 - ✅ Invoices are for different customers/projects
 - ✅ You need to track invoices individually in accounting systems
-- ✅ Importing into DerivativeMill with invoice-level matching
+- ✅ Importing into Millworks with invoice-level matching
 - ✅ Section 232 analysis requires per-invoice tracking
 
 ### Use Consolidated Mode When:
