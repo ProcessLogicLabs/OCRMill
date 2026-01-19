@@ -434,14 +434,6 @@ class PartsDatabaseTab(QWidget):
         parts_master = self._create_parts_master_tab()
         self.sub_tabs.addTab(parts_master, "Parts Master")
 
-        # Part History tab
-        history_widget = self._create_history_tab()
-        self.sub_tabs.addTab(history_widget, "Part History")
-
-        # Statistics tab
-        stats_widget = self._create_stats_tab()
-        self.sub_tabs.addTab(stats_widget, "Statistics")
-
         # Parts Import tab (drag & drop)
         import_widget = self._create_hts_tab()
         self.sub_tabs.addTab(import_widget, "Parts Import")
@@ -533,66 +525,6 @@ class PartsDatabaseTab(QWidget):
         # Status bar
         self.parts_count_label = QLabel("0 parts")
         layout.addWidget(self.parts_count_label)
-
-        return widget
-
-    def _create_history_tab(self) -> QWidget:
-        """Create the part history tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        # Part selection
-        select_layout = QHBoxLayout()
-        select_layout.addWidget(QLabel("Part Number:"))
-        self.history_part_edit = QLineEdit()
-        self.history_part_edit.setPlaceholderText("Enter part number...")
-        select_layout.addWidget(self.history_part_edit)
-
-        view_btn = QPushButton("View History")
-        view_btn.clicked.connect(self._view_part_history)
-        select_layout.addWidget(view_btn)
-        select_layout.addStretch()
-        layout.addLayout(select_layout)
-
-        # History display
-        self.history_text = QPlainTextEdit()
-        self.history_text.setReadOnly(True)
-        layout.addWidget(self.history_text)
-
-        return widget
-
-    def _create_stats_tab(self) -> QWidget:
-        """Create the statistics tab."""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        # Stats display
-        stats_group = QGroupBox("Database Statistics")
-        stats_layout = QFormLayout(stats_group)
-
-        self.stats_labels = {}
-        stats_items = [
-            ("total_parts", "Total Parts:"),
-            ("parts_with_hts", "Parts with HTS:"),
-            ("parts_without_hts", "Parts without HTS:"),
-            ("total_occurrences", "Total Occurrences:"),
-            ("unique_projects", "Unique Projects:"),
-            ("unique_invoices", "Unique Invoices:"),
-        ]
-
-        for key, label in stats_items:
-            value_label = QLabel("--")
-            self.stats_labels[key] = value_label
-            stats_layout.addRow(label, value_label)
-
-        layout.addWidget(stats_group)
-
-        # Refresh button
-        refresh_btn = QPushButton("Refresh Statistics")
-        refresh_btn.clicked.connect(self._refresh_stats)
-        layout.addWidget(refresh_btn)
-
-        layout.addStretch()
 
         return widget
 
@@ -854,7 +786,6 @@ class PartsDatabaseTab(QWidget):
         """Refresh parts data from database."""
         self._apply_filter()
         self._update_counts()
-        self._refresh_stats()
 
     def reload_columns(self):
         """Reload column visibility from config."""
@@ -958,36 +889,15 @@ class PartsDatabaseTab(QWidget):
             self.data_changed.emit()
 
     def _show_part_history(self, part: dict):
-        """Show part history in the history tab."""
-        part_number = part.get('part_number', '')
-        self.history_part_edit.setText(part_number)
-        self._view_part_history()
-        self.sub_tabs.setCurrentIndex(1)  # Switch to History tab
-
-    def _view_part_history(self):
-        """View history for the entered part number."""
-        part_number = self.history_part_edit.text().strip()
-        if not part_number:
-            return
-
-        history = self.db.get_part_history(part_number)
-
-        if not history:
-            self.history_text.setPlainText(f"No history found for part: {part_number}")
-            return
-
-        lines = [f"History for Part: {part_number}\n"]
-        lines.append("=" * 50)
-
-        for record in history:
-            lines.append(f"\nDate: {record.get('processing_date', 'N/A')}")
-            lines.append(f"Invoice: {record.get('invoice_number', 'N/A')}")
-            lines.append(f"Project: {record.get('project_number', 'N/A')}")
-            lines.append(f"Quantity: {record.get('quantity', 'N/A')}")
-            lines.append(f"Total Price: ${record.get('total_price', 0):,.2f}")
-            lines.append("-" * 30)
-
-        self.history_text.setPlainText("\n".join(lines))
+        """Show part history - opens the Statistics dialog at Part History tab."""
+        from ui.dialogs.statistics_dialog import StatisticsDialog
+        dialog = StatisticsDialog(self.db, self)
+        # Switch to Part History tab (index 3)
+        dialog.tabs.setCurrentIndex(3)
+        # Pre-fill the part number
+        dialog.history_part_edit.setText(part.get('part_number', ''))
+        dialog._view_part_history()
+        dialog.exec()
 
     def _set_hts_for_selected(self):
         """Set HTS code for selected part."""
@@ -1406,18 +1316,3 @@ class PartsDatabaseTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Import Error", f"Failed to import:\n{e}")
 
-    # ----- Statistics -----
-
-    def _refresh_stats(self):
-        """Refresh database statistics."""
-        try:
-            stats = self.db.get_statistics()
-
-            self.stats_labels['total_parts'].setText(str(stats.get('total_parts', 0)))
-            self.stats_labels['parts_with_hts'].setText(str(stats.get('parts_with_hts', 0)))
-            self.stats_labels['parts_without_hts'].setText(str(stats.get('parts_without_hts', 0)))
-            self.stats_labels['total_occurrences'].setText(str(stats.get('total_occurrences', 0)))
-            self.stats_labels['unique_projects'].setText(str(stats.get('unique_projects', 0)))
-            self.stats_labels['unique_invoices'].setText(str(stats.get('unique_invoices', 0)))
-        except Exception:
-            pass

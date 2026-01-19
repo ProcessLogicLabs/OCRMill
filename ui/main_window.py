@@ -22,6 +22,7 @@ from updater import UpdateChecker
 
 from ui.tabs.invoice_tab import InvoiceProcessingTab
 from ui.tabs.parts_tab import PartsDatabaseTab
+from ui.tabs.templates_tab import TemplatesTab
 from ui.dialogs.settings_dialog import SettingsDialog
 from ui.dialogs.mid_management_dialog import MIDManagementDialog
 from ui.dialogs.hts_reference_dialog import HTSReferenceDialog
@@ -30,6 +31,7 @@ from ui.dialogs.license_dialog import LicenseDialog, LicenseExpiredDialog
 from ui.dialogs.billing_dialog import BillingDialog
 from ui.dialogs.statistics_dialog import StatisticsDialog
 from ui.dialogs.output_mapping_dialog import OutputMappingDialog
+from ui.dialogs.configuration_dialog import ConfigurationDialog
 from core.workers import ProcessingWorker, UpdateCheckWorker, UpdateDownloadWorker
 from licensing.license_manager import LicenseManager
 from licensing.auth_manager import AuthenticationManager
@@ -150,38 +152,10 @@ class OCRMillMainWindow(QMainWindow):
         # Master Data menu
         master_data_menu = menubar.addMenu("&Master Data")
 
-        import_action = QAction("&Parts Import...", self)
-        import_action.triggered.connect(self._show_parts_import)
-        master_data_menu.addAction(import_action)
-
-        master_data_menu.addSeparator()
-
-        export_master = QAction("Export &Master CSV...", self)
-        export_master.triggered.connect(self._export_master)
-        master_data_menu.addAction(export_master)
-
-        export_history = QAction("Export &History CSV...", self)
-        export_history.triggered.connect(self._export_history)
-        master_data_menu.addAction(export_history)
-
-        master_data_menu.addSeparator()
-
-        output_mapping_action = QAction("&Output Column Mapping...", self)
-        output_mapping_action.triggered.connect(self._show_output_mapping_dialog)
-        master_data_menu.addAction(output_mapping_action)
-
-        master_data_menu.addSeparator()
-
-        reports_action = QAction("&Generate Reports...", self)
-        reports_action.triggered.connect(self._generate_reports)
-        master_data_menu.addAction(reports_action)
-
-        master_data_menu.addSeparator()
-
-        # MID List Management (using new mid_table)
-        mid_action = QAction("&MID List Management...", self)
-        mid_action.triggered.connect(self._show_mid_management_dialog)
-        master_data_menu.addAction(mid_action)
+        # Configuration dialog (TariffMill-style with tabs)
+        config_action = QAction("&Configuration...", self)
+        config_action.triggered.connect(self._show_configuration_dialog)
+        master_data_menu.addAction(config_action)
 
         # References menu
         references_menu = menubar.addMenu("&References")
@@ -189,23 +163,6 @@ class OCRMillMainWindow(QMainWindow):
         hts_action = QAction("&HTS Reference...", self)
         hts_action.triggered.connect(self._show_hts_reference_dialog)
         references_menu.addAction(hts_action)
-
-        # Templates menu
-        templates_menu = menubar.addMenu("&Templates")
-
-        ai_generator_action = QAction("&AI Template Generator...", self)
-        ai_generator_action.triggered.connect(self._show_ai_template_generator)
-        templates_menu.addAction(ai_generator_action)
-
-        templates_menu.addSeparator()
-
-        refresh_templates_action = QAction("&Refresh Templates", self)
-        refresh_templates_action.triggered.connect(self._refresh_templates)
-        templates_menu.addAction(refresh_templates_action)
-
-        manage_templates_action = QAction("&Manage Templates...", self)
-        manage_templates_action.triggered.connect(self._show_template_manager)
-        templates_menu.addAction(manage_templates_action)
 
         # Help menu (includes licensing items)
         help_menu = menubar.addMenu("&Help")
@@ -271,7 +228,7 @@ class OCRMillMainWindow(QMainWindow):
         if logo_path.exists():
             logo_label = QLabel()
             pixmap = QPixmap(str(logo_path))
-            logo_label.setPixmap(pixmap.scaledToHeight(56, Qt.TransformationMode.SmoothTransformation))
+            logo_label.setPixmap(pixmap.scaledToHeight(70, Qt.TransformationMode.SmoothTransformation))
             header_layout.addWidget(logo_label)
 
         # App title - styled like TariffMill with dual-color text
@@ -308,6 +265,11 @@ class OCRMillMainWindow(QMainWindow):
         # Invoice Processing tab (main processing interface)
         self.invoice_tab = InvoiceProcessingTab(self.config, self.db, self)
         self.main_tabs.addTab(self.invoice_tab, "Invoice Processing")
+
+        # Templates tab (template management and AI assistant)
+        self.templates_tab = TemplatesTab(self.config, self.db, self)
+        self.templates_tab.templates_changed.connect(self._refresh_templates)
+        self.main_tabs.addTab(self.templates_tab, "Templates")
 
         # Parts View tab (database view and management)
         self.parts_tab = PartsDatabaseTab(self.config, self.db, self)
@@ -482,91 +444,22 @@ class OCRMillMainWindow(QMainWindow):
 
     @pyqtSlot()
     def _show_parts_import(self):
-        """Show the Parts Import tab for drag & drop column mapping."""
-        # Switch to Parts View tab
-        parts_tab_index = self.main_tabs.indexOf(self.parts_tab)
-        if parts_tab_index >= 0:
-            self.main_tabs.setCurrentIndex(parts_tab_index)
-
-        # Switch to Parts Import sub-tab (index 3)
-        if hasattr(self.parts_tab, 'sub_tabs'):
-            self.parts_tab.sub_tabs.setCurrentIndex(3)  # Parts Import is the 4th tab (index 3)
-
-    @pyqtSlot()
-    def _export_master(self):
-        """Export parts master to CSV."""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Parts Master",
-            "parts_master.csv",
-            "CSV Files (*.csv)"
-        )
-        if file_path:
-            try:
-                self.db.export_to_csv(file_path, include_history=False)
-                QMessageBox.information(
-                    self,
-                    "Export Complete",
-                    f"Parts master exported to:\n{file_path}"
-                )
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Export Error",
-                    f"Failed to export:\n{e}"
-                )
-
-    @pyqtSlot()
-    def _export_history(self):
-        """Export parts history to CSV."""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Parts History",
-            "parts_history.csv",
-            "CSV Files (*.csv)"
-        )
-        if file_path:
-            try:
-                self.db.export_to_csv(file_path, include_history=True)
-                QMessageBox.information(
-                    self,
-                    "Export Complete",
-                    f"Parts history exported to:\n{file_path}"
-                )
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Export Error",
-                    f"Failed to export:\n{e}"
-                )
-
-    @pyqtSlot()
-    def _generate_reports(self):
-        """Generate all reports."""
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Select Reports Folder",
-            str(Path(self.config.output_folder) / "reports")
-        )
-        if folder:
-            try:
-                self.db.create_parts_report(folder)
-                QMessageBox.information(
-                    self,
-                    "Reports Generated",
-                    f"Reports saved to:\n{folder}"
-                )
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Report Error",
-                    f"Failed to generate reports:\n{e}"
-                )
+        """Show the Parts Import tab in the Configuration dialog."""
+        dialog = ConfigurationDialog(self.config, self.db, self)
+        dialog.mapping_changed.connect(self._on_mapping_changed)
+        dialog.parts_imported.connect(self._on_parts_imported)
+        # Switch to Parts Import tab (index 2)
+        dialog.tab_widget.setCurrentIndex(2)
+        dialog.exec()
 
     @pyqtSlot()
     def _show_mid_management_dialog(self):
-        """Show the MID Management dialog (TariffMill-compatible format)."""
-        dialog = MIDManagementDialog(self.db, self)
+        """Show the MID Management tab in the Configuration dialog."""
+        dialog = ConfigurationDialog(self.config, self.db, self)
+        dialog.mapping_changed.connect(self._on_mapping_changed)
+        dialog.parts_imported.connect(self._on_parts_imported)
+        # Switch to MID Management tab (index 3)
+        dialog.tab_widget.setCurrentIndex(3)
         dialog.exec()
 
     @pyqtSlot()
@@ -712,6 +605,22 @@ class OCRMillMainWindow(QMainWindow):
         """Show the output column mapping dialog."""
         dialog = OutputMappingDialog(self.config, self)
         dialog.exec()
+
+    def _show_configuration_dialog(self):
+        """Show the unified configuration dialog (TariffMill-style with tabs)."""
+        dialog = ConfigurationDialog(self.config, self.db, self)
+        dialog.mapping_changed.connect(self._on_mapping_changed)
+        dialog.parts_imported.connect(self._on_parts_imported)
+        dialog.exec()
+
+    def _on_mapping_changed(self):
+        """Handle output mapping changes from configuration dialog."""
+        self.status_label.setText("Output column mapping updated")
+
+    def _on_parts_imported(self):
+        """Handle parts import from configuration dialog."""
+        self.parts_data_changed.emit()
+        self.status_label.setText("Parts imported successfully")
 
     @pyqtSlot()
     def _change_database_location(self):

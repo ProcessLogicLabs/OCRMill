@@ -17,6 +17,7 @@ from PyQt6.QtGui import QFont
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from parts_database import PartsDatabase
 from licensing.auth_manager import AuthenticationManager
+from core.theme_manager import get_theme_manager
 
 
 class LoginDialog(QDialog):
@@ -28,6 +29,7 @@ class LoginDialog(QDialog):
         self.auth_manager = AuthenticationManager(db)
         self.allow_skip = allow_skip
         self.authenticated_user = None
+        self.theme_manager = get_theme_manager()
 
         self.setWindowTitle("OCRMill - Login")
         self.setMinimumWidth(400)
@@ -35,6 +37,7 @@ class LoginDialog(QDialog):
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         self._setup_ui()
+        self._apply_styling()
         self._try_auto_login()
 
     def _setup_ui(self):
@@ -218,3 +221,91 @@ class LoginDialog(QDialog):
     def get_authenticated_user(self):
         """Get the authenticated user info (or None if not authenticated)."""
         return self.authenticated_user
+
+    def _apply_styling(self):
+        """Apply theme-aware styling."""
+        is_dark = self.theme_manager.is_dark_theme()
+
+        if is_dark:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #2d2d2d;
+                }
+                QGroupBox {
+                    font-weight: bold;
+                    border: 1px solid #3c3c3c;
+                    border-radius: 4px;
+                    margin-top: 12px;
+                    padding-top: 10px;
+                    background-color: #252526;
+                    color: #cccccc;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 5px;
+                    color: #4ec9b0;
+                }
+                QLabel {
+                    color: #cccccc;
+                }
+                QPushButton {
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    background-color: #0e639c;
+                    color: white;
+                    border: none;
+                }
+                QPushButton:hover {
+                    background-color: #1177bb;
+                }
+                QLineEdit {
+                    padding: 8px;
+                    border: 1px solid #3c3c3c;
+                    border-radius: 4px;
+                    background-color: #3c3c3c;
+                    color: #cccccc;
+                }
+                QCheckBox {
+                    color: #cccccc;
+                }
+                QFrame[frameShape="4"] {
+                    background-color: #3c3c3c;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #f5f5f5;
+                }
+                QGroupBox {
+                    font-weight: bold;
+                    border: 1px solid #d0d0d0;
+                    border-radius: 4px;
+                    margin-top: 12px;
+                    padding-top: 10px;
+                    background-color: white;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 5px;
+                    color: #5f9ea0;
+                }
+                QPushButton {
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    background-color: #5f9ea0;
+                    color: white;
+                    border: none;
+                }
+                QPushButton:hover {
+                    background-color: #4f8e90;
+                }
+                QLineEdit {
+                    padding: 8px;
+                    border: 1px solid #d0d0d0;
+                    border-radius: 4px;
+                    background-color: white;
+                }
+            """)

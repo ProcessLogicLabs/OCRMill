@@ -23,8 +23,9 @@ class ThemeManager:
     """Manages application theming with support for light/dark modes."""
 
     def __init__(self):
-        self.current_theme = "Muted Cyan"
         self.settings = QSettings("ProcessLogicLabs", "OCRMill")
+        # Load saved theme on init so current_theme reflects actual state
+        self.current_theme = self.settings.value("theme/current", "Muted Cyan")
 
     def load_saved_theme(self) -> str:
         """Load the saved theme from settings."""
