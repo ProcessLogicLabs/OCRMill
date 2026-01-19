@@ -19,7 +19,7 @@ from PyQt6.QtGui import QFont
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from core.theme_manager import get_theme_manager
 from parts_database import PartsDatabase
-from statistics.stats_tracker import StatisticsTracker, EventTypes
+from stats_tracking.stats_tracker import StatisticsTracker, EventTypes
 
 
 class StatisticsDialog(QDialog):

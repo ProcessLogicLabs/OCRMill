@@ -39,8 +39,8 @@ a = Analysis(
         # Billing module
         ('billing', 'billing'),
 
-        # Statistics module
-        ('statistics', 'statistics'),
+        # Statistics module (renamed to avoid conflict with Python's built-in statistics)
+        ('stats_tracking', 'stats_tracking'),
     ],
     hiddenimports=[
         # PyQt6
@@ -111,9 +111,9 @@ a = Analysis(
         'billing.billing_manager',
         'billing.billing_sync',
 
-        # Statistics modules
-        'statistics',
-        'statistics.stats_tracker',
+        # Statistics modules (renamed to avoid conflict with Python's built-in statistics)
+        'stats_tracking',
+        'stats_tracking.stats_tracker',
 
         # AI Template Generator
         'ai_template_generator',

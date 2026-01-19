@@ -229,9 +229,9 @@ def main():
     splash.set_progress(75)
     app.processEvents()
 
-    from statistics.stats_tracker import StatisticsTracker, EventTypes
+    from stats_tracking.stats_tracker import StatisticsTracker, EventTypes
     stats_tracker = StatisticsTracker(db)
-    stats_tracker.track_event(EventTypes.APP_STARTED, {'version': '0.99.01'})
+    stats_tracker.track_event(EventTypes.APP_STARTED, {'version': '0.99.03'})
 
     # Create main window
     splash.set_status("Creating main window...")
