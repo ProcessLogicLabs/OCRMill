@@ -1363,6 +1363,7 @@ class InvoiceProcessingTab(QWidget):
     def _process_pdf_files(self, file_paths: list):
         """Process PDF files directly and show results in preview table."""
         import traceback
+        import time
 
         try:
             output_folder = Path(self.config.output_folder)
@@ -1374,23 +1375,61 @@ class InvoiceProcessingTab(QWidget):
             for file_path in file_paths:
                 pdf_path = Path(file_path)
                 # Note: engine.process_pdf already logs "Processing: {filename}"
+                start_time = time.time()
+                template_used = None
 
                 try:
                     items = self.engine.process_pdf(pdf_path)
+                    processing_time_ms = int((time.time() - start_time) * 1000)
+
+                    # Get template name if available
+                    if hasattr(self.engine, 'last_template_used'):
+                        template_used = self.engine.last_template_used
+
                     if items:
                         all_items.extend(items)
                         self.engine.save_to_csv(items, output_folder, pdf_name=pdf_path.name)
                         processed_count += 1
                         self._log(f"  Extracted {len(items)} items")
+
+                        # Record success in processing history
+                        self.parts_db.record_processing_history(
+                            file_name=pdf_path.name,
+                            template_used=template_used,
+                            items_extracted=len(items),
+                            status='SUCCESS',
+                            processing_time_ms=processing_time_ms
+                        )
                     else:
                         self._log(f"  No items extracted from {pdf_path.name}")
                         self.file_failed.emit(pdf_path.name)
+
+                        # Record partial/no-extract in processing history
+                        self.parts_db.record_processing_history(
+                            file_name=pdf_path.name,
+                            template_used=template_used,
+                            items_extracted=0,
+                            status='PARTIAL',
+                            processing_time_ms=processing_time_ms,
+                            error_message='No items extracted'
+                        )
                 except Exception as e:
+                    processing_time_ms = int((time.time() - start_time) * 1000)
                     self._log(f"  Error: {e}")
                     # Log to crash file for diagnostics
                     error_msg = traceback.format_exc()
                     self._write_crash_log(f"Error processing {pdf_path.name}", error_msg)
                     self.file_failed.emit(pdf_path.name)
+
+                    # Record failure in processing history
+                    self.parts_db.record_processing_history(
+                        file_name=pdf_path.name,
+                        template_used=template_used,
+                        items_extracted=0,
+                        status='FAILED',
+                        processing_time_ms=processing_time_ms,
+                        error_message=str(e)[:500]  # Limit error message length
+                    )
 
             if processed_count > 0:
                 self.files_processed.emit(processed_count)

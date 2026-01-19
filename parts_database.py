@@ -230,6 +230,21 @@ class PartsDatabase:
             )
         """)
 
+        # Processing history table for admin audit
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS processing_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                process_date TEXT,
+                file_name TEXT,
+                template_used TEXT,
+                items_extracted INTEGER DEFAULT 0,
+                status TEXT,
+                user_name TEXT,
+                error_message TEXT,
+                processing_time_ms INTEGER
+            )
+        """)
+
         # Create indexes for billing/stats tables
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_file_number ON billing_records(file_number)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_export_date ON billing_records(export_date)")
@@ -237,6 +252,8 @@ class PartsDatabase:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_usage_stats_event_type ON usage_statistics(event_type)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_usage_stats_timestamp ON usage_statistics(timestamp)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_file_number ON export_audit_log(file_number)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_processing_history_date ON processing_history(process_date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_processing_history_user ON processing_history(user_name)")
 
         self.conn.commit()
 
@@ -1648,6 +1665,26 @@ class PartsDatabase:
                VALUES (?, ?, ?, ?, ?)""",
             (file_number, now.strftime('%Y-%m-%d'), now.strftime('%H:%M:%S'),
              user_name, machine_id)
+        )
+        self.conn.commit()
+
+    def record_processing_history(self, file_name: str, template_used: str = None,
+                                   items_extracted: int = 0, status: str = 'SUCCESS',
+                                   user_name: str = None, error_message: str = None,
+                                   processing_time_ms: int = None) -> None:
+        """Record a PDF processing event in the processing history."""
+        from datetime import datetime
+        import getpass
+        if not user_name:
+            user_name = getpass.getuser()
+        now = datetime.now()
+        self.conn.execute(
+            """INSERT INTO processing_history
+               (process_date, file_name, template_used, items_extracted, status,
+                user_name, error_message, processing_time_ms)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (now.strftime('%Y-%m-%d %H:%M:%S'), file_name, template_used,
+             items_extracted, status, user_name, error_message, processing_time_ms)
         )
         self.conn.commit()
 
