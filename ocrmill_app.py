@@ -6,6 +6,49 @@ Main entry point for the PyQt6-based OCRMill application.
 
 Usage:
     python ocrmill_app.py
+
+================================================================================
+                        PROPRIETARY SOFTWARE LICENSE
+================================================================================
+
+Copyright (c) 2025-2026 Process Logic Labs, LLC. All Rights Reserved.
+
+CONFIDENTIAL AND PROPRIETARY
+
+This software and its source code are the exclusive property of Process Logic
+Labs, LLC. Unauthorized copying, modification, distribution, or use of this
+software, in whole or in part, is strictly prohibited without prior written
+authorization from Process Logic Labs, LLC.
+
+DISCLAIMER OF WARRANTIES:
+THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. PROCESS LOGIC LABS, LLC
+MAKES NO WARRANTIES REGARDING THE ACCURACY, RELIABILITY, OR COMPLETENESS OF
+ANY DATA PROCESSED BY THIS SOFTWARE.
+
+LIMITATION OF LIABILITY:
+IN NO EVENT SHALL PROCESS LOGIC LABS, LLC BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+DATA PROCESSING DISCLAIMER:
+This software performs optical character recognition (OCR) and data extraction.
+Users are solely responsible for verifying the accuracy of all extracted data
+before use. Process Logic Labs, LLC assumes no responsibility for errors in
+data extraction, classification, or any decisions made based on processed data.
+
+INTELLECTUAL PROPERTY:
+OCRMill, the OCRMill logo, and all related trademarks, service marks, and trade
+names are the property of Process Logic Labs, LLC. All rights reserved.
+
+Contact: admin@processlogiclabs.com
+Website: https://processlogiclabs.com
+================================================================================
 """
 
 import sys
@@ -241,6 +284,16 @@ def main():
     from ui.main_window import OCRMillMainWindow
     window = OCRMillMainWindow(config=config, db=db)
     window.auth_manager = auth_manager  # Pass auth manager for user info display
+
+    # Sync user state from auth_manager to main window
+    if auth_manager.is_authenticated:
+        window.current_user = {
+            'email': auth_manager.current_user,
+            'name': auth_manager.current_name,
+            'role': auth_manager.current_role,
+            'is_authenticated': True
+        }
+        window._update_user_status()
 
     # Finish loading
     splash.set_status("Ready!")

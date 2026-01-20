@@ -41,7 +41,7 @@ from licensing.auth_manager import AuthenticationManager
 
 
 # Application version
-VERSION = "0.99.05"
+VERSION = "0.99.06"
 
 
 class OCRMillMainWindow(QMainWindow):
@@ -107,44 +107,57 @@ class OCRMillMainWindow(QMainWindow):
         """Create the menu bar with all menus (TariffMill style)."""
         menubar = self.menuBar()
 
-        # Session menu
-        session_menu = menubar.addMenu("&Session")
+        # Session menu - user info and sign out (TariffMill style)
+        self.session_menu = menubar.addMenu("&Session")
+
+        # User info display - kept enabled so text is not grayed out
+        self.user_info_action = QAction("Not logged in", self)
+        self.user_info_action.setEnabled(True)  # Not grayed out like TariffMill
+        self.session_menu.addAction(self.user_info_action)
+
+        # Sign Out option
+        self.sign_out_action = QAction("Sign Out", self)
+        self.sign_out_action.triggered.connect(self._sign_out_with_options)
+        self.sign_out_action.setEnabled(False)
+        self.session_menu.addAction(self.sign_out_action)
+
+        # Settings menu - includes processing controls
+        settings_menu = menubar.addMenu("S&ettings")
 
         self.start_action = QAction("&Start Monitoring", self)
         self.start_action.setShortcut("F5")
         self.start_action.triggered.connect(self._start_processing)
-        session_menu.addAction(self.start_action)
+        settings_menu.addAction(self.start_action)
 
         self.stop_action = QAction("S&top Monitoring", self)
         self.stop_action.setShortcut("F6")
         self.stop_action.setEnabled(False)
         self.stop_action.triggered.connect(self._stop_processing)
-        session_menu.addAction(self.stop_action)
+        settings_menu.addAction(self.stop_action)
 
-        session_menu.addSeparator()
+        settings_menu.addSeparator()
 
         process_now = QAction("Process &Now", self)
         process_now.setShortcut("F9")
         process_now.triggered.connect(self._process_now)
-        session_menu.addAction(process_now)
+        settings_menu.addAction(process_now)
 
         cbp_export_action = QAction("Run &CBP Export", self)
         cbp_export_action.triggered.connect(self._run_cbp_export)
-        session_menu.addAction(cbp_export_action)
+        settings_menu.addAction(cbp_export_action)
 
-        session_menu.addSeparator()
-
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
-        session_menu.addAction(exit_action)
-
-        # Settings menu
-        settings_menu = menubar.addMenu("S&ettings")
+        settings_menu.addSeparator()
 
         preferences_action = QAction("&Preferences...", self)
         preferences_action.triggered.connect(self._show_settings_dialog)
         settings_menu.addAction(preferences_action)
+
+        settings_menu.addSeparator()
+
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        settings_menu.addAction(exit_action)
 
         # Master Data menu
         master_data_menu = menubar.addMenu("&Master Data")
@@ -578,23 +591,99 @@ class OCRMillMainWindow(QMainWindow):
         dialog.exec()
 
     def _update_user_status(self):
-        """Update the user status display in status bar and menus."""
+        """Update the user status display in status bar, Session menu, and Help menu."""
         if self.current_user and self.current_user.get('is_authenticated'):
             name = self.current_user.get('name') or self.current_user.get('email', 'User')
+            email = self.current_user.get('email', '')
             role = self.current_user.get('role', '')
+
+            # Update status bar
             if role == 'admin':
                 self.user_status.setText(f"{name} (Admin)")
                 self.user_status.setStyleSheet("color: #5f9ea0; font-weight: bold;")
             else:
                 self.user_status.setText(name)
                 self.user_status.setStyleSheet("color: #333;")
+
+            # Update Session menu - show user info (TariffMill style: "Signed in as: user [Role]")
+            display_text = email if email else name
+            role_text = f" [{role.title()}]" if role else ""
+            self.user_info_action.setText(f"Signed in as: {display_text}{role_text}")
+            self.sign_out_action.setEnabled(True)
+
+            # Update Help menu
             self.login_action.setEnabled(False)
             self.logout_action.setEnabled(True)
         else:
+            # Update status bar
             self.user_status.setText("Not logged in")
             self.user_status.setStyleSheet("color: #666;")
+
+            # Update Session menu
+            self.user_info_action.setText("Not logged in")
+            self.sign_out_action.setEnabled(False)
+
+            # Update Help menu
             self.login_action.setEnabled(True)
             self.logout_action.setEnabled(False)
+
+    @pyqtSlot()
+    def _sign_out_with_options(self):
+        """Sign out with option to log in as different user."""
+        # Create custom dialog with sign out options
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Sign Out")
+        dialog.setFixedSize(350, 150)
+
+        layout = QVBoxLayout(dialog)
+
+        # Current user info
+        name = self.current_user.get('name') or self.current_user.get('email', 'User')
+        info_label = QLabel(f"Currently signed in as: <b>{name}</b>")
+        layout.addWidget(info_label)
+
+        layout.addSpacing(10)
+
+        question_label = QLabel("What would you like to do?")
+        layout.addWidget(question_label)
+
+        layout.addSpacing(10)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+
+        # Sign Out button
+        sign_out_btn = QPushButton("Sign Out")
+        sign_out_btn.clicked.connect(lambda: self._do_sign_out(dialog, switch_user=False))
+        button_layout.addWidget(sign_out_btn)
+
+        # Switch User button
+        switch_btn = QPushButton("Sign In as Different User")
+        switch_btn.clicked.connect(lambda: self._do_sign_out(dialog, switch_user=True))
+        button_layout.addWidget(switch_btn)
+
+        # Cancel button
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(dialog.reject)
+        button_layout.addWidget(cancel_btn)
+
+        layout.addLayout(button_layout)
+
+        dialog.exec()
+
+    def _do_sign_out(self, dialog: QDialog, switch_user: bool = False):
+        """Perform sign out and optionally show login dialog."""
+        dialog.accept()
+
+        # Log out current user
+        self.auth_manager.logout()
+        self.current_user = None
+        self._update_user_status()
+        self.status_label.setText("Signed out")
+
+        # If switch user requested, show login dialog
+        if switch_user:
+            QTimer.singleShot(100, self._show_login_dialog)
 
     def _update_window_title(self):
         """Update window title."""
@@ -884,16 +973,96 @@ class OCRMillMainWindow(QMainWindow):
 
     @pyqtSlot()
     def _show_about(self):
-        """Show the about dialog."""
-        QMessageBox.about(
-            self,
-            "About OCRMill",
-            f"<h2>OCRMill v{VERSION}</h2>"
-            "<p>Invoice Processing & Parts Database Management</p>"
-            "<p>&copy; 2024-2025 Process Logic Labs, LLC</p>"
-            "<p><a href='https://github.com/ProcessLogicLabs/OCRMill'>"
-            "GitHub Repository</a></p>"
-        )
+        """Show the about dialog with legal information."""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QScrollArea, QWidget, QPushButton
+        from PyQt6.QtCore import Qt
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About OCRMill")
+        dialog.setMinimumSize(500, 450)
+        dialog.setMaximumSize(600, 600)
+
+        layout = QVBoxLayout(dialog)
+
+        # Header section
+        header_html = f"""
+        <div style='text-align: center;'>
+            <h2 style='margin-bottom: 5px;'>OCRMill v{VERSION}</h2>
+            <p style='color: #666; margin-top: 0;'>Invoice Processing & Parts Database Management</p>
+            <p><b>&copy; 2025-2026 Process Logic Labs, LLC</b></p>
+            <p>All Rights Reserved</p>
+        </div>
+        """
+        header_label = QLabel(header_html)
+        header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(header_label)
+
+        # Scrollable legal section
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMaximumHeight(250)
+
+        legal_widget = QWidget()
+        legal_layout = QVBoxLayout(legal_widget)
+
+        legal_html = """
+        <div style='font-size: 11px; color: #555;'>
+            <p><b>PROPRIETARY SOFTWARE</b><br>
+            This software is the exclusive property of Process Logic Labs, LLC.
+            Unauthorized copying, modification, or distribution is strictly prohibited.</p>
+
+            <p><b>DISCLAIMER OF WARRANTIES</b><br>
+            This software is provided "AS IS" without warranty of any kind, express or
+            implied, including but not limited to the warranties of merchantability,
+            fitness for a particular purpose, and noninfringement.</p>
+
+            <p><b>LIMITATION OF LIABILITY</b><br>
+            In no event shall Process Logic Labs, LLC be liable for any direct, indirect,
+            incidental, special, exemplary, or consequential damages arising from the use
+            of this software.</p>
+
+            <p><b>DATA PROCESSING DISCLAIMER</b><br>
+            This software performs optical character recognition (OCR) and data extraction.
+            Users are solely responsible for verifying the accuracy of all extracted data
+            before use. Process Logic Labs, LLC assumes no responsibility for errors in
+            data extraction or decisions made based on processed data.</p>
+
+            <p><b>INTELLECTUAL PROPERTY</b><br>
+            OCRMill, the OCRMill logo, and all related trademarks are the property of
+            Process Logic Labs, LLC.</p>
+        </div>
+        """
+        legal_label = QLabel(legal_html)
+        legal_label.setWordWrap(True)
+        legal_layout.addWidget(legal_label)
+
+        scroll_area.setWidget(legal_widget)
+        layout.addWidget(scroll_area)
+
+        # Contact info
+        contact_html = """
+        <div style='text-align: center; margin-top: 10px;'>
+            <p><a href='https://processlogiclabs.com'>processlogiclabs.com</a> |
+            <a href='mailto:admin@processlogiclabs.com'>admin@processlogiclabs.com</a></p>
+        </div>
+        """
+        contact_label = QLabel(contact_html)
+        contact_label.setOpenExternalLinks(True)
+        contact_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(contact_label)
+
+        # OK button
+        ok_btn = QPushButton("OK")
+        ok_btn.setFixedWidth(100)
+        ok_btn.clicked.connect(dialog.accept)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        dialog.exec()
 
     @pyqtSlot()
     def _show_activity_log_dialog(self):
