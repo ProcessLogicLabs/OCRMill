@@ -231,7 +231,7 @@ def main():
         app.processEvents()
 
         from ui.dialogs.login_dialog import LoginDialog
-        login_dialog = LoginDialog(db, allow_skip=config.allow_skip_login)
+        login_dialog = LoginDialog(db, allow_skip=config.allow_skip_login, config=config)
         login_dialog.setWindowIcon(app.windowIcon())
 
         if login_dialog.exec() != 1:  # Dialog rejected (cancel clicked)

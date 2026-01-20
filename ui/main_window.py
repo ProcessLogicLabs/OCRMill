@@ -41,7 +41,7 @@ from licensing.auth_manager import AuthenticationManager
 
 
 # Application version
-VERSION = "0.99.08"
+VERSION = "0.99.09"
 
 
 class OCRMillMainWindow(QMainWindow):
@@ -562,7 +562,7 @@ class OCRMillMainWindow(QMainWindow):
     @pyqtSlot()
     def _show_login_dialog(self):
         """Show the login dialog."""
-        dialog = LoginDialog(self.db, self, allow_skip=True)
+        dialog = LoginDialog(self.db, self, allow_skip=True, config=self.config)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             user_info = dialog.get_authenticated_user()
             if user_info:

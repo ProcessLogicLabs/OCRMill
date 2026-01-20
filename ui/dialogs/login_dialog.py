@@ -23,10 +23,11 @@ from core.theme_manager import get_theme_manager
 class LoginDialog(QDialog):
     """Login dialog for user authentication."""
 
-    def __init__(self, db: PartsDatabase, parent=None, allow_skip: bool = False):
+    def __init__(self, db: PartsDatabase, parent=None, allow_skip: bool = False, config=None):
         super().__init__(parent)
         self.db = db
-        self.auth_manager = AuthenticationManager(db)
+        self.config = config
+        self.auth_manager = AuthenticationManager(db, config=config)
         self.allow_skip = allow_skip
         self.authenticated_user = None
         self.theme_manager = get_theme_manager()
