@@ -31,7 +31,7 @@ AUTH_GITHUB_TOKEN = os.environ.get('OCRMILL_GITHUB_TOKEN',
                                     os.environ.get('TARIFFMILL_GITHUB_TOKEN', ''))
 
 # Version for API requests
-VERSION = "0.99.06"
+VERSION = "0.99.07"
 
 
 class AuthenticationManager:
