@@ -216,48 +216,47 @@ def main():
     from licensing.auth_manager import AuthenticationManager
     auth_manager = AuthenticationManager(db)
 
-    # Only perform authentication if require_login is enabled
-    if config.require_login:
-        # Try Windows domain authentication first
-        windows_auth_success, windows_msg, _ = auth_manager.try_windows_auth()
+    # Always try Windows domain authentication first (silent auto-login)
+    windows_auth_success, windows_msg, _ = auth_manager.try_windows_auth()
 
-        if windows_auth_success:
-            # Windows auth successful - continue
-            logging.info(f"Windows auth successful: {auth_manager.current_user}")
+    if windows_auth_success:
+        # Windows auth successful - continue
+        logging.info(f"Windows auth successful: {auth_manager.current_user}")
+    elif config.require_login:
+        # Windows auth failed and login is required - show login dialog
+        logging.debug(f"Windows auth not available: {windows_msg}")
+
+        # Hide splash temporarily to show login dialog
+        splash.hide()
+        app.processEvents()
+
+        from ui.dialogs.login_dialog import LoginDialog
+        login_dialog = LoginDialog(db, allow_skip=config.allow_skip_login)
+        login_dialog.setWindowIcon(app.windowIcon())
+
+        if login_dialog.exec() != 1:  # Dialog rejected (cancel clicked)
+            logging.info("User cancelled login, exiting application")
+            sys.exit(0)
+
+        # Check if user authenticated or skipped
+        if login_dialog.authenticated_user:
+            # Update auth_manager state from login dialog
+            auth_manager.current_user = login_dialog.authenticated_user.get('email')
+            auth_manager.current_name = login_dialog.authenticated_user.get('name')
+            auth_manager.current_role = login_dialog.authenticated_user.get('role')
+            auth_manager.is_authenticated = True
+            logging.info(f"User authenticated: {auth_manager.current_user}")
         else:
-            # Windows auth failed - show login dialog
-            logging.debug(f"Windows auth not available: {windows_msg}")
+            # User skipped login (if allowed)
+            logging.info("User skipped login")
 
-            # Hide splash temporarily to show login dialog
-            splash.hide()
-            app.processEvents()
-
-            from ui.dialogs.login_dialog import LoginDialog
-            login_dialog = LoginDialog(db, allow_skip=config.allow_skip_login)
-            login_dialog.setWindowIcon(app.windowIcon())
-
-            if login_dialog.exec() != 1:  # Dialog rejected (cancel clicked)
-                logging.info("User cancelled login, exiting application")
-                sys.exit(0)
-
-            # Check if user authenticated or skipped
-            if login_dialog.authenticated_user:
-                # Update auth_manager state from login dialog
-                auth_manager.current_user = login_dialog.authenticated_user.get('email')
-                auth_manager.current_name = login_dialog.authenticated_user.get('name')
-                auth_manager.current_role = login_dialog.authenticated_user.get('role')
-                auth_manager.is_authenticated = True
-                logging.info(f"User authenticated: {auth_manager.current_user}")
-            else:
-                # User skipped login (if allowed)
-                logging.info("User skipped login")
-
-            # Show splash again
-            splash.show()
-            splash.center_on_screen()
-            app.processEvents()
+        # Show splash again
+        splash.show()
+        splash.center_on_screen()
+        app.processEvents()
     else:
-        logging.info("Login not required (config.require_login=False)")
+        # Windows auth failed but login not required - continue without auth
+        logging.info(f"Windows auth not available ({windows_msg}), login not required")
 
     # Load templates
     splash.set_status("Loading invoice templates...")
