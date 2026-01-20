@@ -26,7 +26,7 @@ TRIAL_DAYS = 30
 OFFLINE_GRACE_DAYS = 7  # Days to allow offline use before requiring re-validation
 
 # Version for API requests
-VERSION = "0.99.07"
+VERSION = "0.99.08"
 
 
 class LicenseManager:

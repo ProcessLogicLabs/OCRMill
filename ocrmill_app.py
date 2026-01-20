@@ -214,7 +214,7 @@ def main():
     app.processEvents()
 
     from licensing.auth_manager import AuthenticationManager
-    auth_manager = AuthenticationManager(db)
+    auth_manager = AuthenticationManager(db, config=config)
 
     # Always try Windows domain authentication first (silent auto-login)
     windows_auth_success, windows_msg, _ = auth_manager.try_windows_auth()

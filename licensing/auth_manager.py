@@ -31,14 +31,15 @@ AUTH_GITHUB_TOKEN = os.environ.get('OCRMILL_GITHUB_TOKEN',
                                     os.environ.get('TARIFFMILL_GITHUB_TOKEN', ''))
 
 # Version for API requests
-VERSION = "0.99.07"
+VERSION = "0.99.08"
 
 
 class AuthenticationManager:
     """Manages user authentication with Windows domain auth, remote user list, and local caching."""
 
-    def __init__(self, db: PartsDatabase):
+    def __init__(self, db: PartsDatabase, config=None):
         self.db = db
+        self.config = config  # ConfigManager instance for fallback
         self.current_user: Optional[str] = None
         self.current_role: Optional[str] = None
         self.current_name: Optional[str] = None
@@ -63,13 +64,24 @@ class AuthenticationManager:
             return False
 
     def get_allowed_domains(self) -> List[str]:
-        """Get allowed Windows domains from settings."""
+        """Get allowed Windows domains from settings.
+
+        Checks database first, then falls back to config file.
+        """
+        # First try database
         try:
             domains = self._get_config('allowed_domains')
             if domains:
                 return [d.strip() for d in domains.split(',') if d.strip()]
         except Exception:
             pass
+
+        # Fall back to config file if available
+        if self.config and hasattr(self.config, 'allowed_domains'):
+            domains = self.config.allowed_domains
+            if domains:
+                return domains
+
         return []  # No domains configured = no auto-login allowed
 
     def set_allowed_domains(self, domains: List[str]) -> None:

@@ -41,7 +41,7 @@ from licensing.auth_manager import AuthenticationManager
 
 
 # Application version
-VERSION = "0.99.07"
+VERSION = "0.99.08"
 
 
 class OCRMillMainWindow(QMainWindow):
@@ -67,7 +67,7 @@ class OCRMillMainWindow(QMainWindow):
 
         # Licensing and auth managers
         self.license_manager = LicenseManager(self.db)
-        self.auth_manager = AuthenticationManager(self.db)
+        self.auth_manager = AuthenticationManager(self.db, config=self.config)
         self.current_user = None
 
         # Processing state

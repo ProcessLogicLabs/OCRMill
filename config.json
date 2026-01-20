@@ -67,8 +67,8 @@
   "window": {
     "width": 1920,
     "height": 917,
-    "x": 8,
-    "y": 0
+    "x": 9,
+    "y": 4
   },
   "parts_master_columns": {
     "part_number": true,
@@ -99,7 +99,7 @@
     "config_repo_path": null
   },
   "auth": {
-    "allowed_domains": [],
+    "allowed_domains": ["DMUSA"],
     "auto_windows_login": true
   },
   "shared_templates_folder": "Y:/Dev/Tariffmill/Templates",
