@@ -34,6 +34,7 @@ from ui.dialogs.billing_dialog import BillingDialog
 from ui.dialogs.statistics_dialog import StatisticsDialog
 from ui.dialogs.output_mapping_dialog import OutputMappingDialog
 from ui.dialogs.configuration_dialog import ConfigurationDialog
+from ui.dialogs.admin_dialog import AdminDialog
 from core.workers import ProcessingWorker, UpdateCheckWorker, UpdateDownloadWorker
 from licensing.license_manager import LicenseManager
 from licensing.auth_manager import AuthenticationManager
@@ -223,38 +224,34 @@ class OCRMillMainWindow(QMainWindow):
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(10, 8, 10, 12)
 
-        # Logo icon (if available)
-        logo_path = Path(__file__).parent.parent / "Resources" / "logo.png"
-        if logo_path.exists():
+        # Logo icon - use icon_hires.svg (matching app icon)
+        icon_path = Path(__file__).parent.parent / "Resources" / "icon_hires.svg"
+        if icon_path.exists():
             logo_label = QLabel()
-            pixmap = QPixmap(str(logo_path))
-            logo_label.setPixmap(pixmap.scaledToHeight(70, Qt.TransformationMode.SmoothTransformation))
+            pixmap = QPixmap(str(icon_path))
+            logo_label.setPixmap(pixmap.scaledToHeight(44, Qt.TransformationMode.SmoothTransformation))
             header_layout.addWidget(logo_label)
 
         # App title - styled like TariffMill with dual-color text
+        # Colors match icon_hires.svg: teal (#56E0D5/#28B5AA) and purple (#A78BFA/#7C3AED)
         title_widget = QWidget()
         title_layout = QHBoxLayout(title_widget)
         title_layout.setContentsMargins(8, 0, 0, 0)
         title_layout.setSpacing(0)
 
-        # "OCR" in purple/accent color
+        # "OCR" in muted purple/accent color (matching icon purpleGrad)
         ocr_label = QLabel("OCR")
         ocr_label.setStyleSheet("font-size: 34px; font-weight: bold; color: #6b5b95; font-family: 'Segoe UI', sans-serif;")
         title_layout.addWidget(ocr_label)
 
-        # "Mill" in cyan/primary color
+        # "Mill" in teal/primary color (matching icon tealGrad)
         mill_label = QLabel("Mill")
-        mill_label.setStyleSheet("font-size: 34px; font-weight: bold; color: #5f9ea0; font-family: 'Segoe UI', sans-serif;")
+        mill_label.setStyleSheet("font-size: 34px; font-weight: bold; color: #28B5AA; font-family: 'Segoe UI', sans-serif;")
         title_layout.addWidget(mill_label)
 
         title_layout.addStretch()
         header_layout.addWidget(title_widget)
         header_layout.addStretch()
-
-        # Version label (right side)
-        version_label = QLabel(f"v{VERSION}")
-        version_label.setStyleSheet("color: #999999; font-size: 12pt;")
-        header_layout.addWidget(version_label)
 
         layout.addLayout(header_layout)
 
@@ -306,6 +303,17 @@ class OCRMillMainWindow(QMainWindow):
         self.db_status = QLabel()
         self._update_db_status()
         self.status_bar.addPermanentWidget(self.db_status)
+
+        # Separator before version
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.VLine)
+        sep2.setStyleSheet("color: #ccc;")
+        self.status_bar.addPermanentWidget(sep2)
+
+        # Version label (right corner)
+        version_label = QLabel(f"v{VERSION}")
+        version_label.setStyleSheet("color: #999;")
+        self.status_bar.addPermanentWidget(version_label)
 
     def _connect_signals(self):
         """Connect internal signals."""
@@ -975,516 +983,9 @@ class OCRMillMainWindow(QMainWindow):
             )
             return
 
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Administration")
-
-        # Size dialog to 75% of user's screen with minimum size
-        screen = QApplication.primaryScreen().availableGeometry()
-        width = max(1100, int(screen.width() * 0.75))
-        height = max(800, int(screen.height() * 0.75))
-        dialog.resize(width, height)
-        dialog.setMinimumSize(1000, 700)
-
-        layout = QVBoxLayout(dialog)
-
-        # Header with warning
-        header_layout = QHBoxLayout()
-        warning_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
-        icon_label = QLabel()
-        icon_label.setPixmap(warning_icon.pixmap(24, 24))
-        header_layout.addWidget(icon_label)
-        header_label = QLabel("<b>Administration Panel</b> - Restricted Access")
-        header_label.setStyleSheet("color: #dc3545; font-size: 14px;")
-        header_layout.addWidget(header_label)
-        header_layout.addStretch()
-        layout.addLayout(header_layout)
-
-        # Create tab widget
-        tabs = QTabWidget()
-
-        # Audit Log tab
-        tab_audit = QWidget()
-        self._setup_admin_audit_tab(tab_audit)
-        tabs.addTab(tab_audit, "Audit Log")
-
-        # System Info tab
-        tab_system = QWidget()
-        self._setup_admin_system_tab(tab_system)
-        tabs.addTab(tab_system, "System Info")
-
-        # User Statistics tab
-        tab_stats = QWidget()
-        self._setup_admin_user_stats_tab(tab_stats)
-        tabs.addTab(tab_stats, "User Statistics")
-
-        layout.addWidget(tabs)
-
-        # Close button
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_close = QPushButton("Close")
-        btn_close.clicked.connect(dialog.accept)
-        btn_layout.addWidget(btn_close)
-        layout.addLayout(btn_layout)
-
+        # Use the dedicated AdminDialog with full user management capabilities
+        dialog = AdminDialog(self, self.config, self.db)
         dialog.exec()
-
-    def _setup_admin_audit_tab(self, tab_widget):
-        """Setup the Audit Log tab for the Admin dialog."""
-        layout = QVBoxLayout(tab_widget)
-
-        # Header
-        header = QLabel("<h3>Processing Audit Log</h3>")
-        layout.addWidget(header)
-
-        info = QLabel("View all PDF processing attempts, including successful extractions and failures.")
-        info.setStyleSheet("color: #666;")
-        layout.addWidget(info)
-
-        # Filter controls
-        filter_layout = QHBoxLayout()
-        filter_layout.addWidget(QLabel("Filter:"))
-
-        event_filter = QComboBox()
-        event_filter.addItem("All Events", "")
-        event_filter.addItem("Successful", "SUCCESS")
-        event_filter.addItem("Failed", "FAILED")
-        event_filter.addItem("Partial", "PARTIAL")
-        filter_layout.addWidget(event_filter)
-
-        filter_layout.addWidget(QLabel("Days:"))
-        days_spin = QSpinBox()
-        days_spin.setRange(1, 365)
-        days_spin.setValue(30)
-        filter_layout.addWidget(days_spin)
-
-        refresh_btn = QPushButton("Refresh")
-        filter_layout.addWidget(refresh_btn)
-        filter_layout.addStretch()
-        layout.addLayout(filter_layout)
-
-        # Stats row
-        stats_layout = QHBoxLayout()
-        total_label = QLabel("Total: 0")
-        total_label.setStyleSheet("font-weight: bold;")
-        stats_layout.addWidget(total_label)
-        success_label = QLabel("Successful: 0")
-        success_label.setStyleSheet("color: green;")
-        stats_layout.addWidget(success_label)
-        failed_label = QLabel("Failed: 0")
-        failed_label.setStyleSheet("color: red;")
-        stats_layout.addWidget(failed_label)
-        stats_layout.addStretch()
-        layout.addLayout(stats_layout)
-
-        # Audit table
-        audit_table = QTableWidget()
-        audit_table.setColumnCount(7)
-        audit_table.setHorizontalHeaderLabels([
-            "Date", "Time", "Status", "File Name", "Template", "Items", "User"
-        ])
-        audit_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        audit_table.setAlternatingRowColors(True)
-        audit_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        layout.addWidget(audit_table)
-
-        def refresh_audit():
-            try:
-                import sqlite3
-                from datetime import datetime, timedelta
-
-                conn = sqlite3.connect(str(self.config.database_path))
-                c = conn.cursor()
-                days = days_spin.value()
-                event_type = event_filter.currentData()
-
-                # Get processing history from database
-                query = """SELECT process_date, file_name, template_used, items_extracted,
-                                  status, user_name
-                           FROM processing_history
-                           WHERE process_date >= date('now', ?)"""
-                params = [f'-{days} days']
-                if event_type:
-                    query += " AND status = ?"
-                    params.append(event_type)
-                query += " ORDER BY process_date DESC, id DESC LIMIT 500"
-
-                c.execute(query, params)
-                records = c.fetchall()
-
-                # Get stats
-                c.execute("""SELECT COUNT(*),
-                            SUM(CASE WHEN status='SUCCESS' THEN 1 ELSE 0 END),
-                            SUM(CASE WHEN status='FAILED' THEN 1 ELSE 0 END)
-                            FROM processing_history WHERE process_date >= date('now', ?)""",
-                         [f'-{days} days'])
-                stats = c.fetchone()
-                conn.close()
-
-                total_label.setText(f"Total: {stats[0] or 0}")
-                success_label.setText(f"Successful: {stats[1] or 0}")
-                failed_label.setText(f"Failed: {stats[2] or 0}")
-
-                audit_table.setRowCount(len(records))
-                for row_idx, record in enumerate(records):
-                    process_date, fname, template, items, status, user = record
-                    # Split date and time
-                    date_str = str(process_date or '')[:10]
-                    time_str = str(process_date or '')[11:19] if len(str(process_date or '')) > 10 else ''
-
-                    audit_table.setItem(row_idx, 0, QTableWidgetItem(date_str))
-                    audit_table.setItem(row_idx, 1, QTableWidgetItem(time_str))
-
-                    status_item = QTableWidgetItem(str(status or ''))
-                    if status == 'SUCCESS':
-                        status_item.setForeground(QColor('green'))
-                    elif status == 'FAILED':
-                        status_item.setForeground(QColor('red'))
-                    else:
-                        status_item.setForeground(QColor('orange'))
-                    audit_table.setItem(row_idx, 2, status_item)
-
-                    audit_table.setItem(row_idx, 3, QTableWidgetItem(str(fname or '')[:50]))
-                    audit_table.setItem(row_idx, 4, QTableWidgetItem(str(template or '')))
-                    audit_table.setItem(row_idx, 5, QTableWidgetItem(str(items or 0)))
-                    audit_table.setItem(row_idx, 6, QTableWidgetItem(str(user or '')))
-            except Exception as e:
-                print(f"Failed to load audit log: {e}")
-                audit_table.setRowCount(1)
-                audit_table.setItem(0, 0, QTableWidgetItem(f"No audit data available"))
-                audit_table.setSpan(0, 0, 1, 7)
-
-        event_filter.currentIndexChanged.connect(refresh_audit)
-        days_spin.valueChanged.connect(refresh_audit)
-        refresh_btn.clicked.connect(refresh_audit)
-        QTimer.singleShot(100, refresh_audit)
-
-    def _setup_admin_system_tab(self, tab_widget):
-        """Setup the System Info tab for the Admin dialog."""
-        layout = QVBoxLayout(tab_widget)
-
-        header = QLabel("<h3>System Information</h3>")
-        layout.addWidget(header)
-
-        import platform
-        import getpass
-
-        info_text = f"""
-        <table style="font-size: 12px;">
-        <tr><td><b>Application:</b></td><td>OCRMill {VERSION}</td></tr>
-        <tr><td><b>User:</b></td><td>{getpass.getuser()}</td></tr>
-        <tr><td><b>Machine:</b></td><td>{platform.node()}</td></tr>
-        <tr><td><b>Platform:</b></td><td>{platform.system()} {platform.release()}</td></tr>
-        <tr><td><b>Python:</b></td><td>{platform.python_version()}</td></tr>
-        <tr><td><b>Database:</b></td><td>{self.config.database_path}</td></tr>
-        <tr><td><b>Input Dir:</b></td><td>{self.config.input_folder}</td></tr>
-        <tr><td><b>Output Dir:</b></td><td>{self.config.output_folder}</td></tr>
-        </table>
-        """
-        info_label = QLabel(info_text)
-        info_label.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(info_label)
-
-        # Database stats
-        layout.addWidget(QLabel("<h4>Database Statistics</h4>"))
-
-        try:
-            stats = self.db.get_statistics()
-            parts_count = stats.get('total_parts', 0)
-            mid_count = stats.get('total_mids', 0) if 'total_mids' in stats else 0
-
-            # Get additional stats
-            import sqlite3
-            conn = sqlite3.connect(str(self.config.database_path))
-            c = conn.cursor()
-
-            try:
-                c.execute("SELECT COUNT(*) FROM processing_history")
-                processing_count = c.fetchone()[0]
-            except:
-                processing_count = 0
-
-            try:
-                c.execute("SELECT COUNT(*) FROM billing_records")
-                billing_count = c.fetchone()[0]
-            except:
-                billing_count = 0
-
-            conn.close()
-
-            db_stats = f"""
-            <table style="font-size: 12px;">
-            <tr><td><b>Parts in Database:</b></td><td>{parts_count:,}</td></tr>
-            <tr><td><b>MID Entries:</b></td><td>{mid_count:,}</td></tr>
-            <tr><td><b>Processing History Records:</b></td><td>{processing_count:,}</td></tr>
-            <tr><td><b>Billing Records:</b></td><td>{billing_count:,}</td></tr>
-            </table>
-            """
-            db_label = QLabel(db_stats)
-            db_label.setTextFormat(Qt.TextFormat.RichText)
-            layout.addWidget(db_label)
-        except Exception as e:
-            layout.addWidget(QLabel(f"Error loading database stats: {e}"))
-
-        # Configuration paths section
-        layout.addWidget(QLabel("<h4>Configuration</h4>"))
-
-        config_info = f"""
-        <table style="font-size: 12px;">
-        <tr><td><b>Poll Interval:</b></td><td>{self.config.poll_interval} seconds</td></tr>
-        <tr><td><b>Auto Start:</b></td><td>{'Yes' if self.config.auto_start else 'No'}</td></tr>
-        <tr><td><b>Auto CBP Export:</b></td><td>{'Yes' if self.config.auto_cbp_export else 'No'}</td></tr>
-        <tr><td><b>Consolidate Multi-Invoice:</b></td><td>{'Yes' if self.config.consolidate_multi_invoice else 'No'}</td></tr>
-        </table>
-        """
-        config_label = QLabel(config_info)
-        config_label.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(config_label)
-
-        layout.addStretch()
-
-    def _setup_admin_user_stats_tab(self, tab_widget):
-        """Setup the User Statistics tab for the Admin dialog."""
-        layout = QVBoxLayout(tab_widget)
-
-        header = QLabel("<h3>User Processing Statistics</h3>")
-        layout.addWidget(header)
-
-        info = QLabel("View PDF processing statistics for all users.")
-        info.setStyleSheet("color: #666;")
-        layout.addWidget(info)
-
-        # OCRMill totals section
-        totals_group = QGroupBox("OCRMill Totals")
-        totals_layout = QHBoxLayout(totals_group)
-
-        try:
-            import sqlite3
-            conn = sqlite3.connect(str(self.config.database_path))
-            c = conn.cursor()
-
-            try:
-                c.execute("SELECT COUNT(*) FROM processing_history")
-                total_pdfs = c.fetchone()[0] or 0
-            except:
-                total_pdfs = 0
-
-            try:
-                c.execute("SELECT COALESCE(SUM(items_extracted), 0) FROM processing_history")
-                total_items = c.fetchone()[0] or 0
-            except:
-                total_items = 0
-
-            try:
-                c.execute("SELECT COUNT(DISTINCT user_name) FROM processing_history WHERE user_name IS NOT NULL")
-                total_users = c.fetchone()[0] or 0
-            except:
-                total_users = 0
-
-            try:
-                c.execute("SELECT COUNT(DISTINCT template_used) FROM processing_history WHERE template_used IS NOT NULL")
-                total_templates = c.fetchone()[0] or 0
-            except:
-                total_templates = 0
-
-            try:
-                c.execute("""SELECT
-                    CAST(SUM(CASE WHEN status='SUCCESS' THEN 1 ELSE 0 END) AS FLOAT) * 100 /
-                    NULLIF(COUNT(*), 0) FROM processing_history""")
-                success_rate = c.fetchone()[0] or 0
-            except:
-                success_rate = 0
-
-            conn.close()
-
-            stats_html = f"""
-            <table style="font-size: 13px;">
-            <tr>
-                <td style="padding-right: 30px;"><b>Total PDFs Processed:</b></td><td>{total_pdfs:,}</td>
-                <td style="padding-left: 30px;"><b>Total Items Extracted:</b></td><td>{total_items:,}</td>
-            </tr>
-            <tr>
-                <td><b>Active Users:</b></td><td>{total_users:,}</td>
-                <td style="padding-left: 30px;"><b>Templates Used:</b></td><td>{total_templates:,}</td>
-            </tr>
-            <tr>
-                <td><b>Success Rate:</b></td>
-                <td style="color: {'green' if success_rate >= 90 else 'orange' if success_rate >= 70 else 'red'};">{success_rate:.1f}%</td>
-            </tr>
-            </table>
-            """
-            totals_label = QLabel(stats_html)
-            totals_label.setTextFormat(Qt.TextFormat.RichText)
-            totals_layout.addWidget(totals_label)
-        except Exception as e:
-            totals_layout.addWidget(QLabel(f"Error loading totals: {e}"))
-
-        layout.addWidget(totals_group)
-
-        # Processing by user table
-        layout.addWidget(QLabel("<h4>Processing by User</h4>"))
-
-        user_table = QTableWidget()
-        user_table.setColumnCount(5)
-        user_table.setHorizontalHeaderLabels([
-            "User", "PDFs Processed", "Items Extracted", "Success Rate", "Last Activity"
-        ])
-        user_table.horizontalHeader().setStretchLastSection(True)
-        user_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        user_table.setAlternatingRowColors(True)
-        user_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        user_table.setMaximumHeight(200)
-
-        try:
-            import sqlite3
-            conn = sqlite3.connect(str(self.config.database_path))
-            c = conn.cursor()
-            c.execute("""
-                SELECT user_name,
-                       COUNT(*) as pdf_count,
-                       COALESCE(SUM(items_extracted), 0) as total_items,
-                       CAST(SUM(CASE WHEN status='SUCCESS' THEN 1 ELSE 0 END) AS FLOAT) * 100 /
-                           NULLIF(COUNT(*), 0) as success_rate,
-                       MAX(process_date) as last_activity
-                FROM processing_history
-                WHERE user_name IS NOT NULL AND user_name != ''
-                GROUP BY user_name
-                ORDER BY total_items DESC
-            """)
-            user_data = c.fetchall()
-            conn.close()
-
-            user_table.setRowCount(len(user_data))
-            for row_idx, (user_name, pdfs, items, rate, last_activity) in enumerate(user_data):
-                user_table.setItem(row_idx, 0, QTableWidgetItem(user_name or "Unknown"))
-                user_table.setItem(row_idx, 1, QTableWidgetItem(str(pdfs)))
-                user_table.setItem(row_idx, 2, QTableWidgetItem(f"{items:,}"))
-                user_table.setItem(row_idx, 3, QTableWidgetItem(f"{rate:.1f}%" if rate else "N/A"))
-                user_table.setItem(row_idx, 4, QTableWidgetItem(str(last_activity or '')[:16]))
-
-            if not user_data:
-                user_table.setRowCount(1)
-                user_table.setItem(0, 0, QTableWidgetItem("No user data yet"))
-                user_table.setSpan(0, 0, 1, 5)
-        except Exception as e:
-            user_table.setRowCount(1)
-            user_table.setItem(0, 0, QTableWidgetItem(f"Error: {e}"))
-            user_table.setSpan(0, 0, 1, 5)
-
-        layout.addWidget(user_table)
-
-        # Daily activity section
-        layout.addWidget(QLabel("<h4>Recent Daily Activity (Last 30 Days)</h4>"))
-
-        activity_table = QTableWidget()
-        activity_table.setColumnCount(4)
-        activity_table.setHorizontalHeaderLabels([
-            "Date", "PDFs Processed", "Items Extracted", "Success Rate"
-        ])
-        activity_table.horizontalHeader().setStretchLastSection(True)
-        activity_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        activity_table.setAlternatingRowColors(True)
-        activity_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        activity_table.setMaximumHeight(250)
-
-        try:
-            import sqlite3
-            conn = sqlite3.connect(str(self.config.database_path))
-            c = conn.cursor()
-            c.execute("""
-                SELECT DATE(process_date) as day,
-                       COUNT(*) as pdf_count,
-                       COALESCE(SUM(items_extracted), 0) as total_items,
-                       CAST(SUM(CASE WHEN status='SUCCESS' THEN 1 ELSE 0 END) AS FLOAT) * 100 /
-                           NULLIF(COUNT(*), 0) as success_rate
-                FROM processing_history
-                WHERE process_date >= date('now', '-30 days')
-                GROUP BY DATE(process_date)
-                ORDER BY day DESC
-            """)
-            activity_data = c.fetchall()
-            conn.close()
-
-            activity_table.setRowCount(len(activity_data))
-            for row_idx, (day, pdfs, items, rate) in enumerate(activity_data):
-                activity_table.setItem(row_idx, 0, QTableWidgetItem(str(day or '')))
-                activity_table.setItem(row_idx, 1, QTableWidgetItem(str(pdfs)))
-                activity_table.setItem(row_idx, 2, QTableWidgetItem(f"{items:,}"))
-                activity_table.setItem(row_idx, 3, QTableWidgetItem(f"{rate:.1f}%" if rate else "N/A"))
-
-            if not activity_data:
-                activity_table.setRowCount(1)
-                activity_table.setItem(0, 0, QTableWidgetItem("No activity recorded yet"))
-                activity_table.setSpan(0, 0, 1, 4)
-        except Exception as e:
-            activity_table.setRowCount(1)
-            activity_table.setItem(0, 0, QTableWidgetItem(f"Error: {e}"))
-            activity_table.setSpan(0, 0, 1, 4)
-
-        layout.addWidget(activity_table)
-
-        # Refresh button
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        refresh_btn = QPushButton("Refresh Statistics")
-        refresh_btn.clicked.connect(lambda: self._refresh_admin_stats_tables(user_table, activity_table))
-        btn_layout.addWidget(refresh_btn)
-        layout.addLayout(btn_layout)
-
-    def _refresh_admin_stats_tables(self, user_table, activity_table):
-        """Refresh the user and activity tables in the admin dialog."""
-        try:
-            import sqlite3
-            conn = sqlite3.connect(str(self.config.database_path))
-            c = conn.cursor()
-
-            # Refresh user table
-            c.execute("""
-                SELECT user_name,
-                       COUNT(*) as pdf_count,
-                       COALESCE(SUM(items_extracted), 0) as total_items,
-                       CAST(SUM(CASE WHEN status='SUCCESS' THEN 1 ELSE 0 END) AS FLOAT) * 100 /
-                           NULLIF(COUNT(*), 0) as success_rate,
-                       MAX(process_date) as last_activity
-                FROM processing_history
-                WHERE user_name IS NOT NULL AND user_name != ''
-                GROUP BY user_name
-                ORDER BY total_items DESC
-            """)
-            user_data = c.fetchall()
-
-            user_table.setRowCount(len(user_data))
-            for row_idx, (user_name, pdfs, items, rate, last_activity) in enumerate(user_data):
-                user_table.setItem(row_idx, 0, QTableWidgetItem(user_name or "Unknown"))
-                user_table.setItem(row_idx, 1, QTableWidgetItem(str(pdfs)))
-                user_table.setItem(row_idx, 2, QTableWidgetItem(f"{items:,}"))
-                user_table.setItem(row_idx, 3, QTableWidgetItem(f"{rate:.1f}%" if rate else "N/A"))
-                user_table.setItem(row_idx, 4, QTableWidgetItem(str(last_activity or '')[:16]))
-
-            # Refresh activity table
-            c.execute("""
-                SELECT DATE(process_date) as day,
-                       COUNT(*) as pdf_count,
-                       COALESCE(SUM(items_extracted), 0) as total_items,
-                       CAST(SUM(CASE WHEN status='SUCCESS' THEN 1 ELSE 0 END) AS FLOAT) * 100 /
-                           NULLIF(COUNT(*), 0) as success_rate
-                FROM processing_history
-                WHERE process_date >= date('now', '-30 days')
-                GROUP BY DATE(process_date)
-                ORDER BY day DESC
-            """)
-            activity_data = c.fetchall()
-
-            activity_table.setRowCount(len(activity_data))
-            for row_idx, (day, pdfs, items, rate) in enumerate(activity_data):
-                activity_table.setItem(row_idx, 0, QTableWidgetItem(str(day or '')))
-                activity_table.setItem(row_idx, 1, QTableWidgetItem(str(pdfs)))
-                activity_table.setItem(row_idx, 2, QTableWidgetItem(f"{items:,}"))
-                activity_table.setItem(row_idx, 3, QTableWidgetItem(f"{rate:.1f}%" if rate else "N/A"))
-
-            conn.close()
-        except Exception as e:
-            print(f"Error refreshing stats tables: {e}")
 
     # ----- Event Handlers -----
 

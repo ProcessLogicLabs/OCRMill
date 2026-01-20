@@ -5,6 +5,7 @@ Settings Dialog for OCRMill - TariffMill Style with Sidebar Navigation.
 import os
 import sys
 import shutil
+import logging
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QWidget,
@@ -37,6 +38,9 @@ class SettingsDialog(QDialog):
         self.config = config
         self._changes_made = False
         self.theme_manager = get_theme_manager()
+
+        # Get database from parent window
+        self.db = getattr(parent, 'db', None)
 
         self.setWindowTitle("Settings")
         self.setMinimumSize(750, 550)
@@ -107,7 +111,7 @@ class SettingsDialog(QDialog):
         # Category list - TariffMill style with no scrollbar appearance
         self.category_list = QListWidget()
         self.category_list.setObjectName("settingsCategoryList")
-        self.category_list.setSpacing(2)
+        self.category_list.setSpacing(8)
         self.category_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.category_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
@@ -156,9 +160,9 @@ class SettingsDialog(QDialog):
                 }
 
                 #settingsCategoryList::item {
-                    padding: 12px 16px;
+                    padding: 10px 16px;
                     border-radius: 4px;
-                    margin: 2px 8px;
+                    margin: 0px 8px;
                     color: #c0e0f0;
                 }
 
@@ -303,9 +307,9 @@ class SettingsDialog(QDialog):
                 }
 
                 #settingsCategoryList::item {
-                    padding: 12px 16px;
+                    padding: 10px 16px;
                     border-radius: 4px;
-                    margin: 2px 8px;
+                    margin: 0px 8px;
                     color: #cccccc;
                 }
 
@@ -470,9 +474,9 @@ class SettingsDialog(QDialog):
                 }
 
                 #settingsCategoryList::item {
-                    padding: 12px 16px;
+                    padding: 10px 16px;
                     border-radius: 4px;
-                    margin: 2px 8px;
+                    margin: 0px 8px;
                     color: #333;
                 }
 
@@ -569,6 +573,31 @@ class SettingsDialog(QDialog):
                     padding: 5px;
                     border: 1px solid #ccc;
                     border-radius: 3px;
+                }
+
+                QCheckBox {
+                    color: #333;
+                    spacing: 8px;
+                }
+
+                QCheckBox::indicator {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 3px;
+                }
+
+                QCheckBox::indicator:unchecked {
+                    border: 1px solid #ccc;
+                    background-color: white;
+                }
+
+                QCheckBox::indicator:checked {
+                    background-color: #5f9ea0;
+                    border: 1px solid #5f9ea0;
+                }
+
+                QCheckBox::indicator:unchecked:hover {
+                    border-color: #5f9ea0;
                 }
 
                 .infoLabel {
@@ -874,6 +903,15 @@ class SettingsDialog(QDialog):
 
     def _load_ai_settings(self):
         """Load saved AI settings from database."""
+        if not self.db:
+            # No database available, set default status
+            for provider_key in self.ai_provider_widgets:
+                widgets = self.ai_provider_widgets[provider_key]
+                if "status" in widgets:
+                    widgets["status"].setText("○ Database not available")
+                    widgets["status"].setStyleSheet("color: #888; font-size: 9pt;")
+            return
+
         try:
             # Load API keys
             key_map = {
@@ -936,6 +974,10 @@ class SettingsDialog(QDialog):
 
     def _save_ai_settings(self):
         """Save AI settings to database."""
+        if not self.db:
+            QMessageBox.warning(self, "Error", "Database not available. Cannot save settings.")
+            return
+
         try:
             # Save API keys
             key_map = {
@@ -1131,152 +1173,6 @@ class SettingsDialog(QDialog):
 
         except Exception as e:
             logging.warning(f"Failed to load API keys: {e}")
-
-    def _save_api_keys(self):
-        """Save API keys to database."""
-        try:
-            self.db.set_app_config('anthropic_api_key', self.anthropic_key_edit.text().strip())
-            self.db.set_app_config('openai_api_key', self.openai_key_edit.text().strip())
-            self.db.set_app_config('gemini_api_key', self.gemini_key_edit.text().strip())
-            self.db.set_app_config('groq_api_key', self.groq_key_edit.text().strip())
-        except Exception as e:
-            logging.warning(f"Failed to save API keys: {e}")
-
-    def _validate_api_key(self, provider: str):
-        """Validate an API key by making a test request."""
-        import json
-        import urllib.request
-        import urllib.error
-
-        status_labels = {
-            "Anthropic": self.anthropic_status_label,
-            "OpenAI": self.openai_status_label,
-            "Google Gemini": self.gemini_status_label,
-            "Groq": self.groq_status_label,
-            "Ollama": self.ollama_status_label,
-        }
-
-        key_edits = {
-            "Anthropic": self.anthropic_key_edit,
-            "OpenAI": self.openai_key_edit,
-            "Google Gemini": self.gemini_key_edit,
-            "Groq": self.groq_key_edit,
-        }
-
-        status_label = status_labels.get(provider)
-        if not status_label:
-            return
-
-        status_label.setText("Validating...")
-        status_label.setStyleSheet("color: #888; font-size: 9pt;")
-        QApplication.processEvents()
-
-        try:
-            if provider == "Ollama":
-                # Check if Ollama is running
-                req = urllib.request.Request("http://localhost:11434/api/tags")
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    result = json.loads(response.read().decode('utf-8'))
-                    models = result.get('models', [])
-                    if models:
-                        model_names = [m.get('name', '') for m in models[:3]]
-                        status_label.setText(f"✓ Running ({len(models)} models)")
-                    else:
-                        status_label.setText("✓ Running (no models)")
-                    status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
-                return
-
-            api_key = key_edits[provider].text().strip()
-            if not api_key:
-                status_label.setText("✗ No key")
-                status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
-                return
-
-            # Test API calls for each provider
-            if provider == "Anthropic":
-                url = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "Content-Type": "application/json",
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01"
-                }
-                data = {
-                    "model": "claude-3-5-haiku-20241022",
-                    "max_tokens": 10,
-                    "messages": [{"role": "user", "content": "Hi"}]
-                }
-
-            elif provider == "OpenAI":
-                url = "https://api.openai.com/v1/chat/completions"
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                }
-                data = {
-                    "model": "gpt-4o-mini",
-                    "max_tokens": 10,
-                    "messages": [{"role": "user", "content": "Hi"}]
-                }
-
-            elif provider == "Google Gemini":
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-                headers = {"Content-Type": "application/json"}
-                data = {
-                    "contents": [{"role": "user", "parts": [{"text": "Hi"}]}],
-                    "generationConfig": {"maxOutputTokens": 10}
-                }
-
-            elif provider == "Groq":
-                url = "https://api.groq.com/openai/v1/chat/completions"
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                }
-                data = {
-                    "model": "llama-3.1-8b-instant",
-                    "max_tokens": 10,
-                    "messages": [{"role": "user", "content": "Hi"}]
-                }
-
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(data).encode('utf-8'),
-                headers=headers,
-                method='POST'
-            )
-
-            with urllib.request.urlopen(req, timeout=30) as response:
-                status_label.setText("✓ Valid")
-                status_label.setStyleSheet("color: #4ec9b0; font-size: 9pt;")
-
-                # Save the validated key
-                self._save_api_keys()
-
-        except urllib.error.HTTPError as e:
-            if e.code == 401:
-                status_label.setText("✗ Invalid key")
-            elif e.code == 403:
-                status_label.setText("✗ Access denied")
-            elif e.code == 429:
-                status_label.setText("✓ Valid (rate limited)")
-                status_label.setStyleSheet("color: #f0b429; font-size: 9pt;")
-                self._save_api_keys()
-                return
-            else:
-                status_label.setText(f"✗ Error {e.code}")
-            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
-
-        except urllib.error.URLError as e:
-            if provider == "Ollama":
-                status_label.setText("✗ Not running")
-            else:
-                status_label.setText("✗ Network error")
-            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
-
-        except Exception as e:
-            status_label.setText("✗ Error")
-            status_label.setStyleSheet("color: #f14c4c; font-size: 9pt;")
-            logging.warning(f"API validation error for {provider}: {e}")
 
     def _create_templates_page(self) -> QWidget:
         """Create the Templates settings page - TariffMill style."""
@@ -1538,6 +1434,32 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(login_group)
 
+        # Windows Domain Authentication group
+        domain_group = QGroupBox("Windows Domain Authentication")
+        domain_layout = QVBoxLayout(domain_group)
+
+        domain_info = QLabel(
+            "Configure which Windows domains are allowed for automatic login.\n"
+            "Users on these domains can authenticate automatically using their Windows credentials."
+        )
+        domain_info.setWordWrap(True)
+        domain_info.setStyleSheet("color: #666; font-size: 9pt;")
+        domain_layout.addWidget(domain_info)
+
+        # Allowed domains input
+        domains_form = QFormLayout()
+        self.allowed_domains_edit = QLineEdit()
+        self.allowed_domains_edit.setPlaceholderText("e.g., MYCOMPANY, CORP, DOMAIN1")
+        self.allowed_domains_edit.textChanged.connect(self._mark_changed)
+        domains_form.addRow("Allowed Domains:", self.allowed_domains_edit)
+
+        domains_help = QLabel("Enter domain names separated by commas. Case-insensitive.")
+        domains_help.setStyleSheet("color: #999; font-size: 9pt;")
+        domains_form.addRow("", domains_help)
+
+        domain_layout.addLayout(domains_form)
+        layout.addWidget(domain_group)
+
         # Billing group
         billing_group = QGroupBox("Billing & Statistics")
         billing_layout = QVBoxLayout(billing_group)
@@ -1594,6 +1516,7 @@ class SettingsDialog(QDialog):
         self.require_login_check.setChecked(self.config.require_login)
         self.allow_skip_check.setChecked(self.config.allow_skip_login)
         self.auto_windows_check.setChecked(self.config.auto_windows_login)
+        self.allowed_domains_edit.setText(', '.join(self.config.allowed_domains))
         self.billing_enabled_check.setChecked(self.config.billing_enabled)
         self.billing_sync_check.setChecked(self.config.billing_sync_enabled)
 
@@ -1634,6 +1557,13 @@ class SettingsDialog(QDialog):
         self.config.require_login = self.require_login_check.isChecked()
         self.config.allow_skip_login = self.allow_skip_check.isChecked()
         self.config.auto_windows_login = self.auto_windows_check.isChecked()
+        # Parse allowed domains from comma-separated string
+        domains_text = self.allowed_domains_edit.text().strip()
+        if domains_text:
+            domains = [d.strip().upper() for d in domains_text.split(',') if d.strip()]
+        else:
+            domains = []
+        self.config.allowed_domains = domains
         self.config.billing_enabled = self.billing_enabled_check.isChecked()
         self.config.billing_sync_enabled = self.billing_sync_check.isChecked()
 
