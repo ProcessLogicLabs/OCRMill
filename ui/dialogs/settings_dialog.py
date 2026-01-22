@@ -1291,30 +1291,152 @@ class SettingsDialog(QDialog):
         return page
 
     def _create_database_page(self) -> QWidget:
-        """Create the Database settings page."""
+        """Create the Database settings page - TariffMill style."""
         page = QWidget()
-        layout = QVBoxLayout(page)
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.setSpacing(0)
+
+        # Title (outside scroll area)
+        title = QLabel("Database Settings")
+        title.setStyleSheet("font-size: 16pt; font-weight: bold; color: #333; padding: 0 0 10px 0;")
+        page_layout.addWidget(title)
+
+        # Create scroll area for all content
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        scroll_widget = QWidget()
+        layout = QVBoxLayout(scroll_widget)
         layout.setSpacing(15)
+        layout.setContentsMargins(0, 0, 10, 0)  # Add right margin for scrollbar
 
-        title = QLabel("Database")
-        title.setStyleSheet("font-size: 16pt; font-weight: bold; color: #333;")
-        layout.addWidget(title)
+        # Current Database group
+        current_group = QGroupBox("Current Database")
+        current_layout = QFormLayout(current_group)
+        current_layout.setSpacing(8)
 
-        # Database group
-        db_group = QGroupBox("Parts Database")
-        db_layout = QFormLayout(db_group)
+        # Database type
+        self.db_type_label = QLabel()
+        current_layout.addRow("Type:", self.db_type_label)
 
-        # Database path
-        db_path_layout = QHBoxLayout()
+        # Current path (read-only)
         self.db_path_edit = QLineEdit()
         self.db_path_edit.setReadOnly(True)
-        db_path_layout.addWidget(self.db_path_edit)
-        db_browse = QPushButton("Browse...")
-        db_browse.clicked.connect(self._browse_database)
-        db_path_layout.addWidget(db_browse)
-        db_layout.addRow("Database File:", db_path_layout)
+        current_layout.addRow("Location:", self.db_path_edit)
 
-        layout.addWidget(db_group)
+        layout.addWidget(current_group)
+
+        # Shared Database (Multi-User) group
+        shared_group = QGroupBox("Shared Database (Multi-User)")
+        shared_layout = QVBoxLayout(shared_group)
+        shared_layout.setSpacing(10)
+
+        # Info text
+        info_text = QLabel(
+            "Configure platform-specific database paths for cross-platform use.\n"
+            f"Current platform: {self._get_platform_name()}"
+        )
+        info_text.setWordWrap(True)
+        info_text.setStyleSheet("color: #666; font-size: 9pt;")
+        shared_layout.addWidget(info_text)
+
+        # Platform paths
+        paths_form = QFormLayout()
+        paths_form.setSpacing(8)
+
+        # Linux path
+        linux_layout = QHBoxLayout()
+        self.linux_db_edit = QLineEdit()
+        self.linux_db_edit.setPlaceholderText("e.g., /home/shared/tariffmill.db")
+        linux_layout.addWidget(self.linux_db_edit, 1)
+        linux_browse = QPushButton("Browse...")
+        linux_browse.clicked.connect(self._browse_linux_db)
+        linux_layout.addWidget(linux_browse)
+        paths_form.addRow("Linux Path:", linux_layout)
+
+        # Windows path
+        windows_layout = QHBoxLayout()
+        self.windows_db_edit = QLineEdit()
+        self.windows_db_edit.setPlaceholderText(r"e.g., \\server\share\tariffmill.db or Z:\shared\...")
+        windows_layout.addWidget(self.windows_db_edit, 1)
+        windows_browse = QPushButton("Browse...")
+        windows_browse.clicked.connect(self._browse_windows_db)
+        windows_layout.addWidget(windows_browse)
+        paths_form.addRow("Windows Path:", windows_layout)
+
+        shared_layout.addLayout(paths_form)
+
+        # Buttons row
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.apply_platform_btn = QPushButton("Apply Platform Paths")
+        self.apply_platform_btn.setObjectName("successButton")
+        self.apply_platform_btn.clicked.connect(self._apply_platform_paths)
+        btn_layout.addWidget(self.apply_platform_btn)
+
+        self.use_local_btn = QPushButton("Use Local Database")
+        self.use_local_btn.setObjectName("primaryButton")
+        self.use_local_btn.clicked.connect(self._use_local_database)
+        btn_layout.addWidget(self.use_local_btn)
+
+        shared_layout.addLayout(btn_layout)
+
+        # Note about SQLite on network shares
+        note_label = QLabel(
+            "When running on Linux, the Linux path is used. When running on Windows, the\n"
+            "Windows path is used.\nThis allows the same config.ini to work on both platforms.\n\n"
+            "Note: SQLite on network shares works best for sequential access. Avoid having multiple users edit\n"
+            "the same record simultaneously."
+        )
+        note_label.setWordWrap(True)
+        note_label.setStyleSheet("color: #dc3545; font-size: 9pt;")
+        shared_layout.addWidget(note_label)
+
+        layout.addWidget(shared_group)
+
+        # Database Backup group
+        backup_group = QGroupBox("Database Backup")
+        backup_layout = QVBoxLayout(backup_group)
+        backup_layout.setSpacing(10)
+
+        backup_info = QLabel("Configure automatic database backups to protect your data.")
+        backup_info.setStyleSheet("color: #666; font-size: 9pt;")
+        backup_layout.addWidget(backup_info)
+
+        # Backup folder
+        backup_folder_layout = QHBoxLayout()
+        backup_folder_label = QLabel("Backup Folder:")
+        backup_folder_layout.addWidget(backup_folder_label)
+
+        self.backup_folder_edit = QLineEdit()
+        self.backup_folder_edit.setPlaceholderText("Select backup folder")
+        backup_folder_layout.addWidget(self.backup_folder_edit, 1)
+
+        backup_browse = QPushButton("Browse...")
+        backup_browse.clicked.connect(self._browse_backup_folder)
+        backup_folder_layout.addWidget(backup_browse)
+
+        backup_layout.addLayout(backup_folder_layout)
+
+        # Enable automatic backups checkbox
+        self.enable_backups_check = QCheckBox("Enable automatic backups")
+        self.enable_backups_check.stateChanged.connect(self._mark_changed)
+        backup_layout.addWidget(self.enable_backups_check)
+
+        # Note about preferences
+        backup_note = QLabel(
+            "Note: For full backup configuration including schedule and retention, use Preferences > Settings >\n"
+            "Database."
+        )
+        backup_note.setWordWrap(True)
+        backup_note.setStyleSheet("color: #999; font-size: 9pt;")
+        backup_layout.addWidget(backup_note)
+
+        layout.addWidget(backup_group)
 
         # Columns visibility group
         columns_group = QGroupBox("Parts Master Columns")
@@ -1377,6 +1499,11 @@ class SettingsDialog(QDialog):
         layout.addWidget(columns_group)
 
         layout.addStretch()
+
+        # Set scroll widget and add to page
+        scroll_area.setWidget(scroll_widget)
+        page_layout.addWidget(scroll_area)
+
         return page
 
     def _create_updates_page(self) -> QWidget:
@@ -1505,7 +1632,13 @@ class SettingsDialog(QDialog):
             check.setChecked(self.config.get_template_enabled(name))
 
         # Database
+        db_type = self.config.database_type.capitalize()
+        self.db_type_label.setText(db_type)
         self.db_path_edit.setText(str(self.config.database_path))
+        self.windows_db_edit.setText(self.config.windows_database_path)
+        self.linux_db_edit.setText(self.config.linux_database_path)
+        self.backup_folder_edit.setText(self.config.backup_folder)
+        self.enable_backups_check.setChecked(self.config.enable_automatic_backups)
         for col_name, check in self.column_checks.items():
             check.setChecked(self.config.get_column_visible(col_name))
 
@@ -1545,8 +1678,12 @@ class SettingsDialog(QDialog):
         for name, check in self.template_checks.items():
             self.config.set_template_enabled(name, check.isChecked())
 
-        # Database
-        self.config.database_path = self.db_path_edit.text()
+        # Database - Note: database_path and database_type are managed by apply_platform_paths() and use_local_database()
+        # Only save the platform-specific paths and backup settings here
+        self.config.windows_database_path = self.windows_db_edit.text()
+        self.config.linux_database_path = self.linux_db_edit.text()
+        self.config.backup_folder = self.backup_folder_edit.text()
+        self.config.enable_automatic_backups = self.enable_backups_check.isChecked()
         for col_name, check in self.column_checks.items():
             self.config.set_column_visible(col_name, check.isChecked())
 
@@ -1689,6 +1826,109 @@ class SettingsDialog(QDialog):
         refresh_templates()
         self._save_and_refresh_templates()
         self.templates_synced.emit()
+
+    # ========== DATABASE HELPER METHODS ==========
+
+    def _get_platform_name(self) -> str:
+        """Get human-readable platform name."""
+        import platform
+        system = platform.system()
+        if system == "Windows":
+            return "Windows"
+        elif system == "Linux":
+            return "Linux"
+        elif system == "Darwin":
+            return "macOS"
+        return system
+
+    def _browse_linux_db(self):
+        """Browse for Linux database path."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Select Linux Database Path", "", "SQLite Database (*.db)"
+        )
+        if path:
+            self.linux_db_edit.setText(path)
+            self._mark_changed()
+
+    def _browse_windows_db(self):
+        """Browse for Windows database path."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Select Windows Database Path", "", "SQLite Database (*.db)"
+        )
+        if path:
+            self.windows_db_edit.setText(path)
+            self._mark_changed()
+
+    def _browse_backup_folder(self):
+        """Browse for backup folder."""
+        folder = QFileDialog.getExistingDirectory(self, "Select Backup Folder")
+        if folder:
+            self.backup_folder_edit.setText(folder)
+            self._mark_changed()
+
+    def _apply_platform_paths(self):
+        """Apply platform-specific database paths."""
+        try:
+            # Validate paths are configured
+            windows_path = self.windows_db_edit.text().strip()
+            linux_path = self.linux_db_edit.text().strip()
+
+            if not windows_path and not linux_path:
+                QMessageBox.warning(
+                    self, "No Paths Configured",
+                    "Please configure at least one platform path before applying."
+                )
+                return
+
+            # Save paths to config
+            self.config.windows_database_path = windows_path
+            self.config.linux_database_path = linux_path
+
+            # Apply the appropriate path for current platform
+            self.config.apply_platform_paths()
+
+            # Update UI to show current database
+            self.db_type_label.setText("Shared")
+            self.db_path_edit.setText(str(self.config.database_path))
+
+            QMessageBox.information(
+                self, "Platform Paths Applied",
+                f"Shared database configuration applied.\n\n"
+                f"Current database: {self.config.database_path}\n\n"
+                f"The application will need to restart to use the new database."
+            )
+
+            self._mark_changed()
+
+        except ValueError as e:
+            QMessageBox.warning(self, "Error", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to apply platform paths:\n{e}")
+
+    def _use_local_database(self):
+        """Switch to local database."""
+        reply = QMessageBox.question(
+            self, "Use Local Database",
+            "Switch to local database?\n\n"
+            "This will use the local Resources/parts_database.db file.\n"
+            "The application will need to restart to use the new database.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self.config.use_local_database()
+
+            # Update UI
+            self.db_type_label.setText("Local")
+            self.db_path_edit.setText(str(self.config.database_path))
+
+            QMessageBox.information(
+                self, "Local Database",
+                "Switched to local database.\n\n"
+                "Please restart the application to use the local database."
+            )
+
+            self._mark_changed()
 
     # ========== BROWSE HANDLERS ==========
 

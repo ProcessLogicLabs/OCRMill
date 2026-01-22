@@ -23,6 +23,11 @@ DEFAULT_CONFIG = {
     "input_folder": "input",
     "output_folder": "output",
     "database_path": "Resources/parts_database.db",
+    "database_type": "local",  # "local" or "shared"
+    "windows_database_path": "",  # Windows path for shared database (e.g., \\server\share\db.db or Z:\shared\db.db)
+    "linux_database_path": "",  # Linux path for shared database (e.g., /home/shared/db.db)
+    "backup_folder": "",  # Backup folder path
+    "enable_automatic_backups": False,  # Enable automatic database backups
     "poll_interval": 60,
     "auto_start": False,
     "consolidate_multi_invoice": False,  # False = separate CSVs per invoice, True = one CSV per PDF
@@ -250,6 +255,89 @@ class ConfigManager:
     def database_path(self, value: str):
         self.config["database_path"] = str(value)
         self.save()
+
+    @property
+    def database_type(self) -> str:
+        """Get database type: 'local' or 'shared'."""
+        return self.config.get("database_type", "local")
+
+    @database_type.setter
+    def database_type(self, value: str):
+        """Set database type: 'local' or 'shared'."""
+        if value not in ["local", "shared"]:
+            raise ValueError("database_type must be 'local' or 'shared'")
+        self.config["database_type"] = value
+        self.save()
+
+    @property
+    def windows_database_path(self) -> str:
+        """Get Windows shared database path."""
+        return self.config.get("windows_database_path", "")
+
+    @windows_database_path.setter
+    def windows_database_path(self, value: str):
+        """Set Windows shared database path."""
+        self.config["windows_database_path"] = str(value) if value else ""
+        self.save()
+
+    @property
+    def linux_database_path(self) -> str:
+        """Get Linux shared database path."""
+        return self.config.get("linux_database_path", "")
+
+    @linux_database_path.setter
+    def linux_database_path(self, value: str):
+        """Set Linux shared database path."""
+        self.config["linux_database_path"] = str(value) if value else ""
+        self.save()
+
+    @property
+    def backup_folder(self) -> str:
+        """Get backup folder path."""
+        return self.config.get("backup_folder", "")
+
+    @backup_folder.setter
+    def backup_folder(self, value: str):
+        """Set backup folder path."""
+        self.config["backup_folder"] = str(value) if value else ""
+        self.save()
+
+    @property
+    def enable_automatic_backups(self) -> bool:
+        """Check if automatic backups are enabled."""
+        return self.config.get("enable_automatic_backups", False)
+
+    @enable_automatic_backups.setter
+    def enable_automatic_backups(self, value: bool):
+        """Enable or disable automatic backups."""
+        self.config["enable_automatic_backups"] = value
+        self.save()
+
+    def apply_platform_paths(self):
+        """
+        Apply platform-specific database path based on current OS.
+        Sets database_type to 'shared' and database_path to the appropriate platform path.
+        """
+        import platform
+        current_os = platform.system()
+
+        if current_os == "Windows":
+            path = self.windows_database_path
+        elif current_os in ("Linux", "Darwin"):
+            path = self.linux_database_path
+        else:
+            raise ValueError(f"Unsupported platform: {current_os}")
+
+        if not path:
+            raise ValueError(f"No {current_os} database path configured")
+
+        self.database_type = "shared"
+        self.database_path = path
+
+    def use_local_database(self):
+        """Switch back to local database."""
+        self.database_type = "local"
+        self.database_path = "Resources/parts_database.db"
 
     @property
     def shared_templates_folder(self) -> Path:
