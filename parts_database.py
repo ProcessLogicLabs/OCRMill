@@ -245,6 +245,19 @@ class PartsDatabase:
             )
         """)
 
+        # File number divisions table for managing file number patterns per division
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS file_number_divisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                division_name TEXT NOT NULL,
+                prefix TEXT NOT NULL,
+                total_length INTEGER NOT NULL,
+                description TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_date TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Create indexes for billing/stats tables
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_file_number ON billing_records(file_number)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_billing_export_date ON billing_records(export_date)")
