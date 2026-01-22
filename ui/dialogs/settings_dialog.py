@@ -1449,8 +1449,8 @@ class SettingsDialog(QDialog):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setMaximumHeight(200)
 
-        scroll_widget = QWidget()
-        scroll_inner = QVBoxLayout(scroll_widget)
+        columns_scroll_widget = QWidget()
+        scroll_inner = QVBoxLayout(columns_scroll_widget)
 
         self.column_checks = {}
         columns = [
@@ -1480,7 +1480,7 @@ class SettingsDialog(QDialog):
             scroll_inner.addWidget(check)
 
         scroll_inner.addStretch()
-        scroll.setWidget(scroll_widget)
+        scroll.setWidget(columns_scroll_widget)
         columns_layout.addWidget(scroll)
 
         # Select all / none buttons
