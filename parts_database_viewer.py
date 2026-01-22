@@ -129,7 +129,7 @@ class PartsViewerApp:
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
 
         columns = ("part_number", "description", "hts_code", "country_origin", "mid", "client_code",
-                  "steel_pct", "aluminum_pct", "last_updated")
+                  "steel_ratio", "aluminum_ratio", "last_updated")
 
         self.parts_tree = ttk.Treeview(tree_frame, columns=columns, show="headings",
                                        yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -144,8 +144,8 @@ class PartsViewerApp:
         self.parts_tree.heading("country_origin", text="Country of Melt")
         self.parts_tree.heading("mid", text="MID")
         self.parts_tree.heading("client_code", text="Client")
-        self.parts_tree.heading("steel_pct", text="Steel %")
-        self.parts_tree.heading("aluminum_pct", text="Aluminum %")
+        self.parts_tree.heading("steel_ratio", text="Steel %")
+        self.parts_tree.heading("aluminum_ratio", text="Aluminum %")
         self.parts_tree.heading("last_updated", text="Last Updated")
 
         # Column widths
@@ -155,8 +155,8 @@ class PartsViewerApp:
         self.parts_tree.column("country_origin", width=100)
         self.parts_tree.column("mid", width=130)
         self.parts_tree.column("client_code", width=80)
-        self.parts_tree.column("steel_pct", width=60)
-        self.parts_tree.column("aluminum_pct", width=70)
+        self.parts_tree.column("steel_ratio", width=60)
+        self.parts_tree.column("aluminum_ratio", width=70)
         self.parts_tree.column("last_updated", width=90)
 
         # Layout
@@ -409,8 +409,8 @@ class PartsViewerApp:
                 part.get('country_origin', ''),
                 part.get('mid', ''),
                 part.get('client_code', ''),
-                f"{part.get('steel_pct', 0):.0f}%" if part.get('steel_pct') else '',
-                f"{part.get('aluminum_pct', 0):.0f}%" if part.get('aluminum_pct') else '',
+                f"{part.get('steel_ratio', 0):.0f}%" if part.get('steel_ratio') else '',
+                f"{part.get('aluminum_ratio', 0):.0f}%" if part.get('aluminum_ratio') else '',
                 part.get('last_updated', '')[:10] if part.get('last_updated') else ''
             )
             self.parts_tree.insert("", "end", values=values)
@@ -441,8 +441,8 @@ class PartsViewerApp:
                 part.get('country_origin', ''),
                 part.get('mid', ''),
                 part.get('client_code', ''),
-                f"{part.get('steel_pct', 0):.0f}%" if part.get('steel_pct') else '',
-                f"{part.get('aluminum_pct', 0):.0f}%" if part.get('aluminum_pct') else '',
+                f"{part.get('steel_ratio', 0):.0f}%" if part.get('steel_ratio') else '',
+                f"{part.get('aluminum_ratio', 0):.0f}%" if part.get('aluminum_ratio') else '',
                 part.get('last_updated', '')[:10] if part.get('last_updated') else ''
             )
             self.parts_tree.insert("", "end", values=values)
@@ -480,11 +480,11 @@ Top 10 Parts by Value
 """
         self.stats_text.insert("1.0", report)
 
-        # Get top parts
+        # Get top parts (TariffMill schema: parts_master table)
         cursor = self.db.conn.cursor()
         cursor.execute("""
             SELECT part_number, invoice_count, total_quantity, total_value, hts_code
-            FROM parts
+            FROM parts_master
             ORDER BY total_value DESC
             LIMIT 10
         """)
@@ -547,13 +547,11 @@ Part Number: {part_number}
 HTS Code:           {part.get('hts_code') or 'Not assigned'}
 Description:        {part.get('description') or 'N/A'}
 
-Material Composition
+Material Composition (TariffMill Schema)
 {'-' * 60}
-Steel:              {part.get('steel_pct', 0):.0f}%
-Aluminum:           {part.get('aluminum_pct', 0):.0f}%
-Copper:             {part.get('copper_pct', 0):.0f}%
-Wood:               {part.get('wood_pct', 0):.0f}%
-Auto:               {part.get('auto_pct', 0):.0f}%
+Steel:              {part.get('steel_ratio', 0):.0f}%
+Aluminum:           {part.get('aluminum_ratio', 0):.0f}%
+Non-Steel:          {part.get('non_steel_ratio', 0):.0f}%
 
 Timeline
 {'-' * 60}

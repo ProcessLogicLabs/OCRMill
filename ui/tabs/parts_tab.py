@@ -210,9 +210,9 @@ class NewFieldDialog(QDialog):
             QMessageBox.warning(self, "Invalid Name", "Field name can only contain letters, numbers, and underscores.")
             return
 
-        # Reserved words check
+        # Reserved words check (TariffMill schema)
         reserved = ['part_number', 'description', 'hts_code', 'country_origin', 'mid', 'client_code',
-                    'steel_pct', 'aluminum_pct', 'copper_pct', 'wood_pct', 'auto_pct', 'non_steel_pct',
+                    'steel_ratio', 'aluminum_ratio', 'non_steel_ratio',
                     'qty_unit', 'sec301_exclusion_tariff', 'last_updated', 'notes', 'id', 'rowid']
         if field_name.lower() in reserved:
             QMessageBox.warning(self, "Reserved Name", f"'{field_name}' is already used. Please choose a different name.")
@@ -292,12 +292,9 @@ class PartsTableModel(QAbstractTableModel):
         ("country_origin", "Country", 70),
         ("mid", "MID", 150),
         ("client_code", "Client Code", 90),
-        ("steel_pct", "Steel %", 60),
-        ("aluminum_pct", "Alum %", 60),
-        ("copper_pct", "Copper %", 60),
-        ("wood_pct", "Wood %", 60),
-        ("auto_pct", "Auto %", 60),
-        ("non_steel_pct", "Non-Steel %", 70),
+        ("steel_ratio", "Steel %", 60),
+        ("aluminum_ratio", "Alum %", 60),
+        ("non_steel_ratio", "Non-Steel %", 70),
         ("qty_unit", "Unit", 50),
         ("sec301_exclusion_tariff", "301 Excl", 60),
         ("fsc_certified", "FSC", 40),
@@ -359,8 +356,8 @@ class PartsTableModel(QAbstractTableModel):
             part = self._data[index.row()]
             value = part.get(col_name, '')
 
-            # Format percentage columns
-            if col_name.endswith('_pct') and value:
+            # Format percentage columns (TariffMill schema uses _ratio)
+            if col_name.endswith('_ratio') and value:
                 try:
                     return f"{float(value):.0f}"
                 except (ValueError, TypeError):
@@ -586,7 +583,7 @@ class PartsDatabaseTab(QWidget):
         right_layout = QFormLayout(right_scroll_widget)
         right_layout.setSpacing(8)
 
-        # Define all available fields for mapping
+        # Define all available fields for mapping (TariffMill schema)
         # Fields marked with * are required
         self.import_targets = {}
         fields = [
@@ -595,13 +592,8 @@ class PartsDatabaseTab(QWidget):
             ("mid", "MID", "MID", False),
             ("steel_ratio", "Steel %", "Steel%", False),
             ("aluminum_ratio", "Aluminum %", "Aluminum%", False),
-            ("copper_ratio", "Copper %", "Copper%", False),
-            ("wood_ratio", "Wood %", "Wood%", False),
-            ("auto_ratio", "Auto %", "Auto%", False),
+            ("non_steel_ratio", "Non-Steel %", "Non-Steel%", False),
             ("qty_unit", "Qty Unit", "Qty Unit", False),
-            ("country_of_melt", "Country of Melt", "Country of Melt", False),
-            ("country_of_cast", "Country of Cast", "Country of Cast", False),
-            ("country_of_smelt", "Country of Smelt", "Country of Smelt", False),
             ("sec301_exclusion_tariff", "Sec301 Exclusion Tariff", "Sec301 Exclusion Tariff", False),
             ("client_code", "Client Code", "Client Code", False),
             ("description", "Description", "Description", False),
@@ -669,13 +661,13 @@ class PartsDatabaseTab(QWidget):
         """Load any custom fields that were previously added to the database."""
         try:
             cursor = self.db.conn.cursor()
-            cursor.execute("PRAGMA table_info(parts)")
+            cursor.execute("PRAGMA table_info(parts_master)")
             columns = cursor.fetchall()
 
-            # Standard fields that we already have targets for
+            # Standard fields that we already have targets for (TariffMill schema)
             standard_fields = {
                 'part_number', 'description', 'hts_code', 'country_origin', 'mid', 'client_code',
-                'steel_pct', 'aluminum_pct', 'copper_pct', 'wood_pct', 'auto_pct', 'non_steel_pct',
+                'steel_ratio', 'aluminum_ratio', 'non_steel_ratio',
                 'qty_unit', 'sec301_exclusion_tariff', 'last_updated', 'notes',
                 'fsc_certified', 'fsc_certificate_code'
             }
@@ -719,9 +711,9 @@ class PartsDatabaseTab(QWidget):
             return
 
         try:
-            # Add column to database
+            # Add column to database (TariffMill schema: parts_master table)
             cursor = self.db.conn.cursor()
-            cursor.execute(f"ALTER TABLE parts ADD COLUMN {field_name} {field_type}")
+            cursor.execute(f"ALTER TABLE parts_master ADD COLUMN {field_name} {field_type}")
             self.db.conn.commit()
 
             # Create and add the drop target
@@ -1189,18 +1181,16 @@ class PartsDatabaseTab(QWidget):
                 client_code = str(row.get('client_code', '')).strip() or None
                 qty_unit = str(row.get('qty_unit', '')).strip() or 'NO'
 
-                # Parse percentage fields
-                steel_pct = parse_percentage(str(row.get('steel_ratio', '')).strip())
-                aluminum_pct = parse_percentage(str(row.get('aluminum_ratio', '')).strip())
-                copper_pct = parse_percentage(str(row.get('copper_ratio', '')).strip())
-                wood_pct = parse_percentage(str(row.get('wood_ratio', '')).strip())
-                auto_pct = parse_percentage(str(row.get('auto_ratio', '')).strip())
+                # Parse percentage fields (TariffMill schema)
+                steel_ratio = parse_percentage(str(row.get('steel_ratio', '')).strip())
+                aluminum_ratio = parse_percentage(str(row.get('aluminum_ratio', '')).strip())
+                non_steel_ratio = parse_percentage(str(row.get('non_steel_ratio', '')).strip())
 
                 sec301 = str(row.get('sec301_exclusion_tariff', '')).strip() or None
 
                 try:
-                    # Check if part exists
-                    cursor.execute("SELECT part_number FROM parts WHERE part_number = ?", (part_number,))
+                    # Check if part exists (TariffMill schema: parts_master table)
+                    cursor.execute("SELECT part_number FROM parts_master WHERE part_number = ?", (part_number,))
                     exists = cursor.fetchone() is not None
 
                     if exists:
@@ -1226,21 +1216,15 @@ class PartsDatabaseTab(QWidget):
                         if qty_unit and qty_unit != 'NO':
                             updates.append("qty_unit = ?")
                             params.append(qty_unit)
-                        if steel_pct is not None:
-                            updates.append("steel_pct = ?")
-                            params.append(steel_pct)
-                        if aluminum_pct is not None:
-                            updates.append("aluminum_pct = ?")
-                            params.append(aluminum_pct)
-                        if copper_pct is not None:
-                            updates.append("copper_pct = ?")
-                            params.append(copper_pct)
-                        if wood_pct is not None:
-                            updates.append("wood_pct = ?")
-                            params.append(wood_pct)
-                        if auto_pct is not None:
-                            updates.append("auto_pct = ?")
-                            params.append(auto_pct)
+                        if steel_ratio is not None:
+                            updates.append("steel_ratio = ?")
+                            params.append(steel_ratio)
+                        if aluminum_ratio is not None:
+                            updates.append("aluminum_ratio = ?")
+                            params.append(aluminum_ratio)
+                        if non_steel_ratio is not None:
+                            updates.append("non_steel_ratio = ?")
+                            params.append(non_steel_ratio)
                         if sec301:
                             updates.append("sec301_exclusion_tariff = ?")
                             params.append(sec301)
@@ -1258,18 +1242,18 @@ class PartsDatabaseTab(QWidget):
 
                         if updates:
                             params.append(part_number)
-                            cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE part_number = ?", params)
+                            cursor.execute(f"UPDATE parts_master SET {', '.join(updates)} WHERE part_number = ?", params)
                             updated += 1
                     else:
-                        # Insert new part - build dynamic column list for custom fields
+                        # Insert new part - build dynamic column list for custom fields (TariffMill schema)
                         base_columns = [
                             'part_number', 'description', 'hts_code', 'country_origin', 'mid', 'client_code',
-                            'steel_pct', 'aluminum_pct', 'copper_pct', 'wood_pct', 'auto_pct',
+                            'steel_ratio', 'aluminum_ratio', 'non_steel_ratio',
                             'qty_unit', 'sec301_exclusion_tariff', 'last_updated'
                         ]
                         base_values = [
                             part_number, description, hts_code, country_origin, mid, client_code,
-                            steel_pct or 0, aluminum_pct or 0, copper_pct or 0, wood_pct or 0, auto_pct or 0,
+                            steel_ratio or 0, aluminum_ratio or 0, non_steel_ratio or 0,
                             qty_unit, sec301, datetime.now().isoformat()
                         ]
 
@@ -1284,7 +1268,7 @@ class PartsDatabaseTab(QWidget):
                         columns_str = ', '.join(base_columns)
 
                         cursor.execute(f"""
-                            INSERT INTO parts ({columns_str}) VALUES ({placeholders})
+                            INSERT INTO parts_master ({columns_str}) VALUES ({placeholders})
                         """, base_values)
                         inserted += 1
                 except Exception:

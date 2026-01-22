@@ -183,12 +183,9 @@ class ConfigurationDialog(QDialog):
 
         self.visibility_checks = {}
         visibility_fields = [
-            ("steel_pct", "Steel%", 0, 0),
-            ("aluminum_pct", "Aluminum%", 0, 1),
-            ("copper_pct", "Copper%", 1, 0),
-            ("wood_pct", "Wood%", 1, 1),
-            ("auto_pct", "Auto%", 2, 0),
-            ("non_steel_pct", "NonSteel%", 2, 1),
+            ("steel_ratio", "Steel%", 0, 0),
+            ("aluminum_ratio", "Aluminum%", 0, 1),
+            ("non_steel_ratio", "NonSteel%", 1, 0),
         ]
 
         for field, label, row, col in visibility_fields:
@@ -248,7 +245,7 @@ class ConfigurationDialog(QDialog):
             row.deleteLater()
         self.output_column_rows = []
 
-        # Default columns
+        # Default columns (TariffMill schema)
         columns = [
             ("product_no", "Product No", "Product No"),
             ("value_usd", "ValueUSD", "ValueUSD"),
@@ -263,8 +260,7 @@ class ConfigurationDialog(QDialog):
             ("declaration_flag", "DeclarationFlag", "DeclarationFlag"),
             ("steel_ratio", "SteelRatio", "SteelRatio"),
             ("aluminum_ratio", "AluminumRatio", "AluminumRatio"),
-            ("copper_ratio", "CopperRatio", "CopperRatio"),
-            ("wood_ratio", "WoodRatio", "WoodRatio"),
+            ("non_steel_ratio", "NonSteelRatio", "NonSteelRatio"),
         ]
 
         for internal, display, default_name in columns:
@@ -353,21 +349,16 @@ class ConfigurationDialog(QDialog):
         self.parts_fields_layout.setSpacing(8)
         self.parts_fields_layout.setHorizontalSpacing(15)
 
-        # Parts fields - TariffMill style
+        # Parts fields - TariffMill schema
         self.parts_targets = {}
         parts_fields = [
             ("part_number", "Part Number:", True),
             ("hts_code", "HTS Code:", True),
             ("mid", "MID:", False),
-            ("steel_pct", "Steel %:", False),
-            ("aluminum_pct", "Aluminum %:", False),
-            ("copper_pct", "Copper %:", False),
-            ("wood_pct", "Wood %:", False),
-            ("auto_pct", "Auto %:", False),
+            ("steel_ratio", "Steel %:", False),
+            ("aluminum_ratio", "Aluminum %:", False),
+            ("non_steel_ratio", "Non-Steel %:", False),
             ("qty_unit", "Qty Unit:", False),
-            ("country_of_melt", "Country of Melt:", False),
-            ("country_of_cast", "Country of Cast:", False),
-            ("country_of_smelt", "Country of Smelt:", False),
             ("sec301_exclusion_tariff", "Sec301 Exclusion Tariff:", False),
             ("client_code", "Client Code:", False),
             ("description", "Description:", False),
@@ -1014,8 +1005,8 @@ class ConfigurationDialog(QDialog):
                     skipped += 1
                     continue
 
-                # Check if exists
-                cursor.execute("SELECT part_number FROM parts WHERE part_number = ?", (part_number,))
+                # Check if exists (TariffMill schema: parts_master table)
+                cursor.execute("SELECT part_number FROM parts_master WHERE part_number = ?", (part_number,))
                 exists = cursor.fetchone() is not None
 
                 # Build values
@@ -1030,32 +1021,32 @@ class ConfigurationDialog(QDialog):
                     'last_updated': datetime.now().isoformat(),
                 }
 
-                # Parse percentage fields
-                for pct_field in ['steel_pct', 'aluminum_pct', 'copper_pct', 'wood_pct', 'auto_pct']:
-                    val = str(row.get(mapping.get(pct_field, ''), '')).strip()
+                # Parse percentage fields (TariffMill schema: *_ratio columns)
+                for ratio_field in ['steel_ratio', 'aluminum_ratio', 'non_steel_ratio']:
+                    val = str(row.get(mapping.get(ratio_field, ''), '')).strip()
                     if val:
                         try:
                             pct = float(val)
                             if 0 < pct <= 1:
                                 pct *= 100
-                            values[pct_field] = pct
+                            values[ratio_field] = pct
                         except ValueError:
-                            values[pct_field] = 0
+                            values[ratio_field] = 0
                     else:
-                        values[pct_field] = 0
+                        values[ratio_field] = 0
 
                 if exists:
                     # Update
                     updates = [f"{k} = ?" for k in values.keys() if k != 'part_number']
                     params = [v for k, v in values.items() if k != 'part_number']
                     params.append(part_number)
-                    cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE part_number = ?", params)
+                    cursor.execute(f"UPDATE parts_master SET {', '.join(updates)} WHERE part_number = ?", params)
                     updated += 1
                 else:
                     # Insert
                     cols = ', '.join(values.keys())
                     placeholders = ', '.join(['?' for _ in values])
-                    cursor.execute(f"INSERT INTO parts ({cols}) VALUES ({placeholders})", list(values.values()))
+                    cursor.execute(f"INSERT INTO parts_master ({cols}) VALUES ({placeholders})", list(values.values()))
                     inserted += 1
 
             self.db.conn.commit()
