@@ -73,7 +73,9 @@ DEFAULT_CONFIG = {
     "auth": {
         "allowed_domains": [],
         "auto_windows_login": True
-    }
+    },
+    "shared_templates_folder": None,  # Path to shared templates folder (e.g., TariffMill's templates)
+    "auto_process_drops": False  # Automatically process files when dropped
 }
 
 
@@ -218,14 +220,56 @@ class ConfigManager:
 
     @property
     def database_path(self) -> Path:
+        """
+        Get the database path with validation and fallback.
+
+        Supports:
+        - Absolute paths (e.g., Y:/Shared/parts_database.db)
+        - Relative paths (relative to APP_PATH)
+        - Automatic fallback to local if shared path doesn't exist
+        """
         db_path = self.config.get("database_path", "Resources/parts_database.db")
-        if not Path(db_path).is_absolute():
-            return APP_PATH / db_path
-        return Path(db_path)
+        path_obj = Path(db_path) if Path(db_path).is_absolute() else APP_PATH / db_path
+
+        # Validate path exists or can be created
+        if not path_obj.exists():
+            # Try to create parent directory
+            try:
+                path_obj.parent.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError) as e:
+                # If shared path fails, fall back to local Resources folder
+                if Path(db_path).is_absolute():
+                    fallback = APP_PATH / "Resources" / "parts_database.db"
+                    fallback.parent.mkdir(parents=True, exist_ok=True)
+                    print(f"Warning: Cannot access {path_obj}, falling back to {fallback}")
+                    return fallback
+
+        return path_obj
 
     @database_path.setter
     def database_path(self, value: str):
         self.config["database_path"] = str(value)
+        self.save()
+
+    @property
+    def shared_templates_folder(self) -> Path:
+        """
+        Get the shared templates folder path (e.g., TariffMill's templates).
+        Returns None if not configured or path doesn't exist.
+        """
+        folder = self.config.get("shared_templates_folder")
+        if not folder:
+            return None
+
+        path_obj = Path(folder)
+        if path_obj.exists() and path_obj.is_dir():
+            return path_obj
+
+        return None
+
+    @shared_templates_folder.setter
+    def shared_templates_folder(self, value: str):
+        self.config["shared_templates_folder"] = str(value) if value else None
         self.save()
 
     def get_template_enabled(self, template_name: str) -> bool:

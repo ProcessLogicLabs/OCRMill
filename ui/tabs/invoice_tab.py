@@ -1393,7 +1393,7 @@ class InvoiceProcessingTab(QWidget):
                         self._log(f"  Extracted {len(items)} items")
 
                         # Record success in processing history
-                        self.parts_db.record_processing_history(
+                        self.db.record_processing_history(
                             file_name=pdf_path.name,
                             template_used=template_used,
                             items_extracted=len(items),
@@ -1405,7 +1405,7 @@ class InvoiceProcessingTab(QWidget):
                         self.file_failed.emit(pdf_path.name)
 
                         # Record partial/no-extract in processing history
-                        self.parts_db.record_processing_history(
+                        self.db.record_processing_history(
                             file_name=pdf_path.name,
                             template_used=template_used,
                             items_extracted=0,
