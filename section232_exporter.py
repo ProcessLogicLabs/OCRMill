@@ -105,7 +105,7 @@ class Section232Exporter:
         return items
 
     def _enrich_with_materials(self, items: List[Dict]) -> List[Dict]:
-        """Lookup material composition from parts database."""
+        """Lookup material composition from parts database (TariffMill schema)."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -114,21 +114,21 @@ class Section232Exporter:
             if part_number:
                 cursor.execute("""
                     SELECT
-                        steel_pct, aluminum_pct, copper_pct, wood_pct,
-                        auto_pct, non_steel_pct, qty_unit
-                    FROM parts
+                        steel_ratio, aluminum_ratio, non_steel_ratio, qty_unit
+                    FROM parts_master
                     WHERE part_number = ?
                 """, (part_number,))
 
                 result = cursor.fetchone()
                 if result:
+                    # TariffMill uses ratio (0-100), map to expected column names
                     item['steel_pct'] = result[0] or 0.0
                     item['aluminum_pct'] = result[1] or 0.0
-                    item['copper_pct'] = result[2] or 0.0
-                    item['wood_pct'] = result[3] or 0.0
-                    item['auto_pct'] = result[4] or 0.0
-                    item['non_steel_pct'] = result[5] or 0.0
-                    item['qty_unit'] = result[6] or 'NO'
+                    item['copper_pct'] = 0.0  # Not in TariffMill schema
+                    item['wood_pct'] = 0.0  # Not in TariffMill schema
+                    item['auto_pct'] = 0.0  # Not in TariffMill schema
+                    item['non_steel_pct'] = result[2] or 0.0
+                    item['qty_unit'] = result[3] or 'NO'
                 else:
                     # Default to 0 if not found
                     item['steel_pct'] = 0.0

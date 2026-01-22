@@ -38,21 +38,18 @@ class PartsDatabase:
         self.conn.row_factory = sqlite3.Row
         cursor = self.conn.cursor()
 
-        # Parts master table - matches parts_MMCITE.xlsx format
+        # Parts master table - TariffMill compatible schema
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS parts (
+            CREATE TABLE IF NOT EXISTS parts_master (
                 part_number TEXT PRIMARY KEY,
                 description TEXT,
                 hts_code TEXT,
                 country_origin TEXT,
                 mid TEXT,
                 client_code TEXT,
-                steel_pct REAL DEFAULT 0,
-                aluminum_pct REAL DEFAULT 0,
-                copper_pct REAL DEFAULT 0,
-                wood_pct REAL DEFAULT 0,
-                auto_pct REAL DEFAULT 0,
-                non_steel_pct REAL DEFAULT 0,
+                steel_ratio REAL DEFAULT 0,
+                aluminum_ratio REAL DEFAULT 0,
+                non_steel_ratio REAL DEFAULT 0,
                 qty_unit TEXT DEFAULT 'NO',
                 sec301_exclusion_tariff TEXT,
                 last_updated TEXT,
@@ -60,16 +57,16 @@ class PartsDatabase:
             )
         """)
 
-        # Note: All columns are now in the main schema above
-        # Migration from old schema is handled by rebuild_parts_database.py
+        # Note: Schema now matches TariffMill's parts_master table
+        # Migration from old OCRMill schema handled by migrate_to_tariffmill_schema.py
 
         # Add FSC certification column if it doesn't exist (migration)
-        cursor.execute("PRAGMA table_info(parts)")
+        cursor.execute("PRAGMA table_info(parts_master)")
         columns = [col[1] for col in cursor.fetchall()]
         if 'fsc_certified' not in columns:
-            cursor.execute("ALTER TABLE parts ADD COLUMN fsc_certified TEXT")
+            cursor.execute("ALTER TABLE parts_master ADD COLUMN fsc_certified TEXT")
         if 'fsc_certificate_code' not in columns:
-            cursor.execute("ALTER TABLE parts ADD COLUMN fsc_certificate_code TEXT")
+            cursor.execute("ALTER TABLE parts_master ADD COLUMN fsc_certificate_code TEXT")
 
         # Part occurrences - tracks each time a part appears on an invoice
         cursor.execute("""
@@ -81,10 +78,10 @@ class PartsDatabase:
                 quantity REAL,
                 total_price REAL,
                 unit_price REAL,
-                steel_pct REAL,
+                steel_ratio REAL,
                 steel_kg REAL,
                 steel_value REAL,
-                aluminum_pct REAL,
+                aluminum_ratio REAL,
                 aluminum_kg REAL,
                 aluminum_value REAL,
                 net_weight REAL,
@@ -94,7 +91,7 @@ class PartsDatabase:
                 source_file TEXT,
                 mid TEXT,
                 client_code TEXT,
-                FOREIGN KEY (part_number) REFERENCES parts(part_number)
+                FOREIGN KEY (part_number) REFERENCES parts_master(part_number)
             )
         """)
 
@@ -124,7 +121,7 @@ class PartsDatabase:
                 part_number TEXT PRIMARY KEY,
                 description_text TEXT,
                 keywords TEXT,
-                FOREIGN KEY (part_number) REFERENCES parts(part_number)
+                FOREIGN KEY (part_number) REFERENCES parts_master(part_number)
             )
         """)
 
@@ -282,8 +279,8 @@ class PartsDatabase:
                 - quantity
                 - total_price
                 - unit_price (optional)
-                - steel_pct, steel_kg, steel_value
-                - aluminum_pct, aluminum_kg, aluminum_value
+                - steel_ratio, steel_kg, steel_value
+                - aluminum_ratio, aluminum_kg, aluminum_value
                 - net_weight
                 - ncm_code
                 - hts_code
@@ -341,8 +338,8 @@ class PartsDatabase:
             cursor.execute("""
                 INSERT INTO part_occurrences (
                     part_number, invoice_number, project_number, quantity, total_price, unit_price,
-                    steel_pct, steel_kg, steel_value,
-                    aluminum_pct, aluminum_kg, aluminum_value,
+                    steel_ratio, steel_kg, steel_value,
+                    aluminum_ratio, aluminum_kg, aluminum_value,
                     net_weight, ncm_code, hts_code, processed_date, source_file
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -352,10 +349,10 @@ class PartsDatabase:
                 part_data.get('quantity'),
                 part_data.get('total_price'),
                 unit_price,
-                part_data.get('steel_pct'),
+                part_data.get('steel_ratio'),
                 part_data.get('steel_kg'),
                 part_data.get('steel_value'),
-                part_data.get('aluminum_pct'),
+                part_data.get('aluminum_ratio'),
                 part_data.get('aluminum_kg'),
                 part_data.get('aluminum_value'),
                 part_data.get('net_weight'),
@@ -376,14 +373,14 @@ class PartsDatabase:
         cursor = self.conn.cursor()
 
         # Check if part exists
-        cursor.execute("SELECT part_number FROM parts WHERE part_number = ?", (part_number,))
+        cursor.execute("SELECT part_number FROM parts_master WHERE part_number = ?", (part_number,))
         exists = cursor.fetchone() is not None
 
         # Get latest material percentages from most recent occurrence
         cursor.execute("""
             SELECT
-                steel_pct,
-                aluminum_pct,
+                steel_ratio,
+                aluminum_ratio,
                 processed_date
             FROM part_occurrences
             WHERE part_number = ?
@@ -412,10 +409,10 @@ class PartsDatabase:
             new_description = clean_value(part_data.get('description'))
 
             cursor.execute("""
-                UPDATE parts SET
+                UPDATE parts_master SET
                     description = COALESCE(?, description),
-                    steel_pct = COALESCE(?, steel_pct),
-                    aluminum_pct = COALESCE(?, aluminum_pct),
+                    steel_ratio = COALESCE(?, steel_ratio),
+                    aluminum_ratio = COALESCE(?, aluminum_ratio),
                     mid = COALESCE(?, mid),
                     country_origin = COALESCE(?, country_origin),
                     client_code = COALESCE(?, client_code),
@@ -425,8 +422,8 @@ class PartsDatabase:
                 WHERE part_number = ?
             """, (
                 new_description,
-                latest['steel_pct'] if latest else part_data.get('steel_pct'),
-                latest['aluminum_pct'] if latest else part_data.get('aluminum_pct'),
+                latest['steel_ratio'] if latest else part_data.get('steel_ratio'),
+                latest['aluminum_ratio'] if latest else part_data.get('aluminum_ratio'),
                 new_mid,
                 new_country,
                 new_client,
@@ -438,16 +435,16 @@ class PartsDatabase:
         else:
             # Insert new part
             cursor.execute("""
-                INSERT INTO parts (
-                    part_number, description, hts_code, steel_pct, aluminum_pct,
+                INSERT INTO parts_master (
+                    part_number, description, hts_code, steel_ratio, aluminum_ratio,
                     mid, country_origin, client_code, fsc_certified, fsc_certificate_code, last_updated
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 part_number,
                 part_data.get('description'),
                 part_data.get('hts_code'),
-                latest['steel_pct'] if latest else part_data.get('steel_pct'),
-                latest['aluminum_pct'] if latest else part_data.get('aluminum_pct'),
+                latest['steel_ratio'] if latest else part_data.get('steel_ratio'),
+                latest['aluminum_ratio'] if latest else part_data.get('aluminum_ratio'),
                 part_data.get('mid'),
                 part_data.get('country_origin'),
                 part_data.get('client_code'),
@@ -518,8 +515,8 @@ class PartsDatabase:
             'invoice_number': ['invoice_number', 'invoice number', 'invoicenumber', 'invoice_no', 'invoice no', 'invoice', 'inv_number', 'inv_no'],
             'project_number': ['project_number', 'project number', 'projectnumber', 'project_no', 'project no', 'project', 'po_number', 'po number'],
             'hts_code': ['hts_code', 'hts code', 'htscode', 'hts', 'tariff_code', 'tariff code', 'hs_code', 'hs code', 'harmonized_code'],
-            'steel_pct': ['steel_ratio', 'steel ratio', 'steel_pct', 'steel pct', 'steel_%', 'steel %', 'steel_percent', 'steel'],
-            'aluminum_pct': ['aluminum_ratio', 'aluminum ratio', 'aluminum_pct', 'aluminum pct', 'aluminum_%', 'aluminum %', 'aluminum_percent', 'aluminum', 'aluminium_pct', 'aluminium'],
+            'steel_ratio': ['steel_ratio', 'steel ratio', 'steel_ratio', 'steel pct', 'steel_%', 'steel %', 'steel_percent', 'steel'],
+            'aluminum_ratio': ['aluminum_ratio', 'aluminum ratio', 'aluminum_ratio', 'aluminum pct', 'aluminum_%', 'aluminum %', 'aluminum_percent', 'aluminum', 'aluminium_pct', 'aluminium'],
             'mid': ['mid', 'manufacturer_id', 'manufacturer id', 'mfg_id', 'mfr_id'],
             'client_code': ['client code', 'client_code', 'clientcode', 'client', 'customer_code', 'customer code', 'importer_code', 'importer'],
             'source_file': ['source_file', 'source file', 'sourcefile', 'file', 'filename', 'file_name'],
@@ -574,18 +571,18 @@ class PartsDatabase:
                         continue
 
                     # Check if part exists
-                    cursor.execute("SELECT part_number FROM parts WHERE part_number = ?", (part_number,))
+                    cursor.execute("SELECT part_number FROM parts_master WHERE part_number = ?", (part_number,))
                     exists = cursor.fetchone() is not None
 
                     # Prepare data - support both old and new column formats
                     hts_code = str(row.get('hts_code', '')) if pd.notna(row.get('hts_code')) else None
                     country_origin = str(row.get('country_origin', '')) if pd.notna(row.get('country_origin')) else None
-                    steel_pct = float(row.get('steel_pct')) if pd.notna(row.get('steel_pct')) else None
-                    aluminum_pct = float(row.get('aluminum_pct')) if pd.notna(row.get('aluminum_pct')) else None
+                    steel_ratio = float(row.get('steel_ratio')) if pd.notna(row.get('steel_ratio')) else None
+                    aluminum_ratio = float(row.get('aluminum_ratio')) if pd.notna(row.get('aluminum_ratio')) else None
                     copper_pct = float(row.get('copper_pct')) if pd.notna(row.get('copper_pct')) else None
                     wood_pct = float(row.get('wood_pct')) if pd.notna(row.get('wood_pct')) else None
                     auto_pct = float(row.get('auto_pct')) if pd.notna(row.get('auto_pct')) else None
-                    non_steel_pct = float(row.get('non_steel_pct')) if pd.notna(row.get('non_steel_pct')) else None
+                    non_steel_ratio = float(row.get('non_steel_ratio')) if pd.notna(row.get('non_steel_ratio')) else None
                     qty_unit = str(row.get('qty_unit', 'NO')) if pd.notna(row.get('qty_unit')) else 'NO'
                     sec301 = str(row.get('sec301_exclusion_tariff', '')) if pd.notna(row.get('sec301_exclusion_tariff')) else None
                     mid = str(row.get('mid', '')) if pd.notna(row.get('mid')) else None
@@ -603,24 +600,16 @@ class PartsDatabase:
                         if country_origin and country_origin != 'nan':
                             updates.append("country_origin = ?")
                             params.append(country_origin)
-                        if steel_pct is not None:
-                            updates.append("steel_pct = ?")
-                            params.append(steel_pct)
-                        if aluminum_pct is not None:
-                            updates.append("aluminum_pct = ?")
-                            params.append(aluminum_pct)
-                        if copper_pct is not None:
-                            updates.append("copper_pct = ?")
-                            params.append(copper_pct)
-                        if wood_pct is not None:
-                            updates.append("wood_pct = ?")
-                            params.append(wood_pct)
-                        if auto_pct is not None:
-                            updates.append("auto_pct = ?")
-                            params.append(auto_pct)
-                        if non_steel_pct is not None:
-                            updates.append("non_steel_pct = ?")
-                            params.append(non_steel_pct)
+                        if steel_ratio is not None:
+                            updates.append("steel_ratio = ?")
+                            params.append(steel_ratio)
+                        if aluminum_ratio is not None:
+                            updates.append("aluminum_ratio = ?")
+                            params.append(aluminum_ratio)
+                        if non_steel_ratio is not None:
+                            updates.append("non_steel_ratio = ?")
+                            params.append(non_steel_ratio)
+                        # Note: copper_pct, wood_pct, auto_pct not in TariffMill schema - ignored if present in CSV
                         if qty_unit and qty_unit != 'nan':
                             updates.append("qty_unit = ?")
                             params.append(qty_unit)
@@ -642,27 +631,24 @@ class PartsDatabase:
 
                         if updates:
                             params.append(part_number)
-                            cursor.execute(f"UPDATE parts SET {', '.join(updates)} WHERE part_number = ?", params)
+                            cursor.execute(f"UPDATE parts_master SET {', '.join(updates)} WHERE part_number = ?", params)
                             updated += 1
 
                     elif not exists:
-                        # Insert new part
+                        # Insert new part (TariffMill schema - no copper/wood/auto columns)
                         cursor.execute("""
-                            INSERT INTO parts (part_number, description, hts_code, country_origin,
-                                             steel_pct, aluminum_pct, copper_pct, wood_pct, auto_pct, non_steel_pct,
+                            INSERT INTO parts_master (part_number, description, hts_code, country_origin,
+                                             steel_ratio, aluminum_ratio, non_steel_ratio,
                                              qty_unit, sec301_exclusion_tariff, mid, client_code, last_updated)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             part_number,
                             description if description and description != 'nan' else None,
                             hts_code if hts_code and hts_code != 'nan' else None,
                             country_origin if country_origin and country_origin != 'nan' else None,
-                            steel_pct,
-                            aluminum_pct,
-                            copper_pct,
-                            wood_pct,
-                            auto_pct,
-                            non_steel_pct,
+                            steel_ratio,
+                            aluminum_ratio,
+                            non_steel_ratio,
                             qty_unit,
                             sec301 if sec301 and sec301 != 'nan' else None,
                             mid if mid and mid != 'nan' else None,
@@ -696,7 +682,7 @@ class PartsDatabase:
         cursor = self.conn.cursor()
 
         # First check if part already has HTS code
-        cursor.execute("SELECT hts_code FROM parts WHERE part_number = ? AND hts_code IS NOT NULL", (part_number,))
+        cursor.execute("SELECT hts_code FROM parts_master WHERE part_number = ? AND hts_code IS NOT NULL", (part_number,))
         result = cursor.fetchone()
         if result and result['hts_code']:
             return result['hts_code']
@@ -748,14 +734,14 @@ class PartsDatabase:
     def get_part_summary(self, part_number: str) -> Optional[Dict]:
         """Get summary information for a part."""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM parts WHERE part_number = ?", (part_number,))
+        cursor.execute("SELECT * FROM parts_master WHERE part_number = ?", (part_number,))
         result = cursor.fetchone()
         return dict(result) if result else None
 
     def get_all_parts(self, order_by: str = "last_updated DESC") -> List[Dict]:
         """Get all parts in the database."""
         cursor = self.conn.cursor()
-        cursor.execute(f"SELECT * FROM parts ORDER BY {order_by}")
+        cursor.execute(f"SELECT * FROM parts_master ORDER BY {order_by}")
         return [dict(row) for row in cursor.fetchall()]
 
     def get_parts_by_project(self, project_number: str) -> List[Dict]:
@@ -763,7 +749,7 @@ class PartsDatabase:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT DISTINCT p.*, po.quantity, po.total_price
-            FROM parts p
+            FROM parts_master p
             JOIN part_occurrences po ON p.part_number = po.part_number
             WHERE po.project_number = ?
             ORDER BY p.part_number
@@ -806,16 +792,13 @@ class PartsDatabase:
                     country_origin,
                     mid,
                     client_code,
-                    steel_pct,
-                    aluminum_pct,
-                    copper_pct,
-                    wood_pct,
-                    auto_pct,
-                    non_steel_pct,
+                    steel_ratio,
+                    aluminum_ratio,
+                    non_steel_ratio,
                     qty_unit,
                     sec301_exclusion_tariff,
                     last_updated
-                FROM parts
+                FROM parts_master
                 ORDER BY part_number
             """)
             rows = cursor.fetchall()
@@ -830,7 +813,7 @@ class PartsDatabase:
         """Get database statistics."""
         cursor = self.conn.cursor()
 
-        cursor.execute("SELECT COUNT(*) as count FROM parts")
+        cursor.execute("SELECT COUNT(*) as count FROM parts_master")
         total_parts = cursor.fetchone()['count']
 
         cursor.execute("SELECT COUNT(*) as count FROM part_occurrences")
@@ -846,7 +829,7 @@ class PartsDatabase:
         cursor.execute("SELECT SUM(total_price) as total FROM part_occurrences")
         total_value = cursor.fetchone()['total'] or 0
 
-        cursor.execute("SELECT COUNT(*) as count FROM parts WHERE hts_code IS NOT NULL")
+        cursor.execute("SELECT COUNT(*) as count FROM parts_master WHERE hts_code IS NOT NULL")
         parts_with_hts = cursor.fetchone()['count']
 
         return {
@@ -863,7 +846,7 @@ class PartsDatabase:
         """Search parts by part number or description."""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT * FROM parts
+            SELECT * FROM parts_master
             WHERE part_number LIKE ? OR description LIKE ?
             ORDER BY part_number
         """, (f'%{search_term}%', f'%{search_term}%'))
@@ -873,7 +856,7 @@ class PartsDatabase:
         """Update description for a part."""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE parts SET description = ?
+            UPDATE parts_master SET description = ?
             WHERE part_number = ?
         """, (description, part_number))
         self.conn.commit()
@@ -882,7 +865,7 @@ class PartsDatabase:
         """Manually update HTS code for a part (hts_description parameter kept for backward compatibility but not used)."""
         cursor = self.conn.cursor()
         cursor.execute("""
-            UPDATE parts SET hts_code = ?, last_updated = ?
+            UPDATE parts_master SET hts_code = ?, last_updated = ?
             WHERE part_number = ?
         """, (hts_code, datetime.now().isoformat(), part_number))
         self.conn.commit()

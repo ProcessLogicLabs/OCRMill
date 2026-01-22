@@ -8,13 +8,12 @@ The Section 232 Export feature generates CBP-compliant Steel and Aluminum Declar
 
 ### 1. Material Composition Lookup
 
-For each part number in the processed CSVs, the exporter queries the parts database for:
-- `steel_pct` - Steel percentage (0-100)
-- `aluminum_pct` - Aluminum percentage (0-100)
-- `copper_pct` - Copper percentage (0-100)
-- `wood_pct` - Wood percentage (0-100)
-- `auto_pct` - Automotive percentage (0-100)
-- `non_steel_pct` - Non-Section 232 percentage (0-100)
+For each part number in the processed CSVs, the exporter queries the parts_master database (TariffMill schema) for:
+- `steel_ratio` - Steel percentage (0-100)
+- `aluminum_ratio` - Aluminum percentage (0-100)
+- `non_steel_ratio` - Non-Section 232 percentage (0-100)
+
+**Note:** OCRMill now uses TariffMill's database schema for compatibility. Copper, wood, and automotive percentages are not included in the standard schema.
 
 ### 2. Row Expansion by Material
 
@@ -133,18 +132,23 @@ Material percentages must be maintained in the parts database. There are several
 
 ### 1. Import from CSV/Excel
 Use the Parts Database tab to import parts master data with material composition columns:
-- steel_pct
-- aluminum_pct
-- copper_pct
-- wood_pct
-- auto_pct
-- non_steel_pct
+- `steel_ratio` (or `steel_pct` - will be auto-mapped)
+- `aluminum_ratio` (or `aluminum_pct` - will be auto-mapped)
+- `non_steel_ratio` (or `non_steel_pct` - will be auto-mapped)
+
+**Note:** OCRMill now uses TariffMill's schema (`parts_master` table with `*_ratio` columns).
 
 ### 2. Manual Entry
 Edit parts individually in the Parts Database tab and set material percentages.
 
 ### 3. Shared Database with TariffMill
-If using a shared database (see SHARED_CONFIG.md), material composition data from TariffMill is automatically available.
+If using a shared database (see SHARED_CONFIG.md), material composition data from TariffMill is automatically available. Both applications now use the same schema.
+
+### 4. Migrate Existing OCRMill Database
+If you have an existing OCRMill database with the old schema, run:
+```bash
+python migrate_to_tariffmill_schema.py Resources/parts_database.db
+```
 
 ## Requirements
 
@@ -159,9 +163,10 @@ If using a shared database (see SHARED_CONFIG.md), material composition data fro
 - Check that CSV files exist in `output/Processed/`
 
 ### "All rows show 0% material composition"
-- Material data is not in the parts database
-- Import parts master data with material percentages
-- Or edit parts individually to set composition
+- Material data is not in the parts_master database
+- Import parts master data with material percentages (steel_ratio, aluminum_ratio, non_steel_ratio)
+- Or edit parts individually in the Parts Database tab
+- If migrating from old OCRMill database, run: `python migrate_to_tariffmill_schema.py Resources/parts_database.db`
 
 ### "Quantities are incorrect"
 - Check that `qty_unit` is set correctly in parts database
@@ -184,4 +189,6 @@ This export follows TariffMill's Section 232 export logic:
 
 ## Version History
 
+- **v0.99.16** - Updated to use TariffMill database schema for full compatibility
+- **v0.99.15** - Added Section 232 export feature
 - **v0.99.14** - Initial Section 232 export implementation
