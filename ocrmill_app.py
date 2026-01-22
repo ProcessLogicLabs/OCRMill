@@ -273,7 +273,7 @@ def main():
 
     from stats_tracking.stats_tracker import StatisticsTracker, EventTypes
     stats_tracker = StatisticsTracker(db)
-    stats_tracker.track_event(EventTypes.APP_STARTED, {'version': '0.99.12'})
+    stats_tracker.track_event(EventTypes.APP_STARTED, {'version': '0.99.13'})
 
     # Create main window
     splash.set_status("Creating main window...")

@@ -22,6 +22,7 @@ import subprocess
 import platform
 import getpass
 import os
+import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Tuple
@@ -31,7 +32,8 @@ from PyQt6.QtWidgets import (
     QWidget, QTabWidget, QGroupBox, QLabel, QPushButton, QLineEdit,
     QComboBox, QCheckBox, QSpinBox, QDoubleSpinBox, QTableWidget,
     QTableWidgetItem, QHeaderView, QMessageBox, QScrollArea, QFrame,
-    QListWidget, QListWidgetItem, QAbstractItemView, QStyle, QApplication
+    QListWidget, QListWidgetItem, QAbstractItemView, QStyle, QApplication,
+    QFileDialog
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QIcon
@@ -1217,8 +1219,409 @@ class AdminDialog(QDialog):
                 f"Failed to send test email:\n{str(e)}")
 
     def _show_billing_report(self):
-        """Show billing report dialog."""
-        QMessageBox.information(self, "Billing Report", "Billing report functionality coming soon.")
+        """Show dialog with billing report for the selected month."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("OCRMill Billing Report")
+        dialog.setMinimumSize(900, 700)
+
+        layout = QVBoxLayout(dialog)
+
+        # Month selection
+        month_layout = QHBoxLayout()
+        month_layout.addWidget(QLabel("Month:"))
+
+        month_combo = QComboBox()
+        # Generate list of last 12 months
+        now = datetime.now()
+        for i in range(12):
+            month_date = now - timedelta(days=i * 30)
+            month_str = month_date.strftime("%Y-%m")
+            month_display = month_date.strftime("%B %Y")
+            month_combo.addItem(month_display, month_str)
+
+        month_layout.addWidget(month_combo)
+        month_layout.addStretch()
+
+        refresh_btn = QPushButton("Refresh")
+        month_layout.addWidget(refresh_btn)
+
+        generate_btn = QPushButton("Generate Report")
+        month_layout.addWidget(generate_btn)
+
+        send_btn = QPushButton("Send Invoice")
+        month_layout.addWidget(send_btn)
+
+        layout.addLayout(month_layout)
+
+        # Summary
+        summary_group = QGroupBox("Summary")
+        summary_layout = QFormLayout()
+
+        export_count_label = QLabel("0")
+        summary_layout.addRow("Total Exports:", export_count_label)
+
+        total_lines_label = QLabel("0")
+        summary_layout.addRow("Total Lines:", total_lines_label)
+
+        total_value_label = QLabel("$0.00")
+        summary_layout.addRow("Total Value Processed:", total_value_label)
+
+        rate_label = QLabel("$0.00")
+        summary_layout.addRow("Rate per Export:", rate_label)
+
+        amount_due_label = QLabel("$0.00")
+        amount_due_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        summary_layout.addRow("Amount Due:", amount_due_label)
+
+        summary_group.setLayout(summary_layout)
+        layout.addWidget(summary_group)
+
+        # Details table
+        details_group = QGroupBox("Export Details")
+        details_layout = QVBoxLayout()
+
+        details_table = QTableWidget()
+        details_table.setColumnCount(7)
+        details_table.setHorizontalHeaderLabels([
+            "File #", "Date", "Time", "File Name", "Lines", "Value", "User"
+        ])
+        details_table.horizontalHeader().setStretchLastSection(True)
+        details_table.setAlternatingRowColors(True)
+
+        details_layout.addWidget(details_table)
+        details_group.setLayout(details_layout)
+        layout.addWidget(details_group)
+
+        # Duplicate Attempts section (potential billing bypass)
+        dup_group = QGroupBox("Duplicate File Number Attempts (None)")
+        dup_group.setStyleSheet("QGroupBox { color: #dc3545; font-weight: bold; }")
+        dup_layout = QVBoxLayout()
+
+        dup_table = QTableWidget()
+        dup_table.setColumnCount(6)
+        dup_table.setHorizontalHeaderLabels([
+            "File #", "Attempt Date", "Time", "User", "Machine ID", "Days Since Original"
+        ])
+        dup_table.horizontalHeader().setStretchLastSection(True)
+        dup_table.setAlternatingRowColors(True)
+        dup_table.setMaximumHeight(150)
+
+        dup_layout.addWidget(dup_table)
+        dup_group.setLayout(dup_layout)
+        layout.addWidget(dup_group)
+
+        # Function to refresh the report
+        def refresh_report():
+            selected_month = month_combo.currentData()
+            summary = self._get_billing_summary(selected_month)
+            rate = float(self._get_billing_setting('rate_per_file', '0'))
+
+            export_count_label.setText(str(summary['export_count']))
+            total_lines_label.setText(str(summary['total_lines']))
+            total_value_label.setText(f"${summary['total_value']:,.2f}")
+            rate_label.setText(f"${rate:.2f}")
+            amount_due_label.setText(f"${summary['export_count'] * rate:,.2f}")
+
+            # Populate table
+            details_table.setRowCount(len(summary['records']))
+            for row_idx, record in enumerate(summary['records']):
+                details_table.setItem(row_idx, 0, QTableWidgetItem(record.get('file_number', '')))
+                details_table.setItem(row_idx, 1, QTableWidgetItem(record.get('export_date', '')))
+                details_table.setItem(row_idx, 2, QTableWidgetItem(record.get('export_time', '')))
+                details_table.setItem(row_idx, 3, QTableWidgetItem(record.get('file_name', '')))
+                details_table.setItem(row_idx, 4, QTableWidgetItem(str(record.get('line_count', 0))))
+                details_table.setItem(row_idx, 5, QTableWidgetItem(f"${record.get('total_value', 0):,.2f}"))
+                details_table.setItem(row_idx, 6, QTableWidgetItem(record.get('user_name', '')))
+
+            details_table.resizeColumnsToContents()
+
+            # Populate duplicate attempts table
+            try:
+                conn = sqlite3.connect(str(self.config.database_path))
+                c = conn.cursor()
+                c.execute("""SELECT file_number, attempt_date, user_name,
+                                    machine_id, days_since_original
+                             FROM billing_duplicate_attempts
+                             WHERE attempt_date LIKE ?
+                             ORDER BY attempt_date DESC""",
+                         (selected_month + '%',))
+                dup_records = c.fetchall()
+                conn.close()
+
+                dup_table.setRowCount(len(dup_records))
+                for row_idx, record in enumerate(dup_records):
+                    file_num, att_date, user, machine, days = record
+                    # Parse datetime
+                    try:
+                        dt = datetime.fromisoformat(att_date)
+                        date_str = dt.strftime('%Y-%m-%d')
+                        time_str = dt.strftime('%H:%M:%S')
+                    except:
+                        date_str = str(att_date or '')[:10]
+                        time_str = str(att_date or '')[11:19] if len(str(att_date or '')) > 11 else ''
+
+                    dup_table.setItem(row_idx, 0, QTableWidgetItem(str(file_num or '')))
+                    dup_table.setItem(row_idx, 1, QTableWidgetItem(date_str))
+                    dup_table.setItem(row_idx, 2, QTableWidgetItem(time_str))
+                    dup_table.setItem(row_idx, 3, QTableWidgetItem(str(user or '')))
+                    dup_table.setItem(row_idx, 4, QTableWidgetItem(str(machine or '')))
+                    days_item = QTableWidgetItem(str(days or 0))
+                    if days and days > 30:
+                        days_item.setForeground(QColor("#dc3545"))  # Red for old re-exports
+                    dup_table.setItem(row_idx, 5, days_item)
+
+                dup_table.resizeColumnsToContents()
+
+                # Update group box title with count
+                if dup_records:
+                    dup_group.setTitle(f"Duplicate File Number Attempts ({len(dup_records)} found)")
+                else:
+                    dup_group.setTitle("Duplicate File Number Attempts (None)")
+
+            except Exception as e:
+                logger.error(f"Failed to load duplicate attempts: {e}")
+
+        # Connect signals
+        month_combo.currentIndexChanged.connect(refresh_report)
+        refresh_btn.clicked.connect(refresh_report)
+        generate_btn.clicked.connect(lambda: self._generate_billing_report(month_combo.currentData()))
+        send_btn.clicked.connect(lambda: self._send_billing_invoice(month_combo.currentData()))
+
+        # Initial load
+        refresh_report()
+
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+        dialog.exec()
+
+    def _get_billing_summary(self, month: str = None):
+        """Get billing summary for a specific month."""
+        try:
+            if not self.db:
+                return {'month': month, 'export_count': 0, 'total_lines': 0, 'total_value': 0.0, 'records': []}
+
+            records = self.db.get_billing_records(invoice_month=month)
+
+            total_lines = sum(r.get('line_count', 0) for r in records)
+            total_value = sum(r.get('total_value', 0) for r in records)
+
+            return {
+                'month': month,
+                'export_count': len(records),
+                'total_lines': total_lines,
+                'total_value': total_value,
+                'records': records
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get billing summary: {e}")
+            return {'month': month, 'export_count': 0, 'total_lines': 0, 'total_value': 0.0, 'records': []}
+
+    def _generate_billing_report(self, month: str):
+        """Generate a professionally styled billing report with logo."""
+        summary = self._get_billing_summary(month)
+        rate = float(self._get_billing_setting('rate_per_file', '0'))
+        amount_due = summary['export_count'] * rate
+        customer_name = self._get_billing_setting('customer_name', 'Valued Customer')
+        company_name = self._get_billing_setting('company_name', 'Process Logic Labs, LLC')
+
+        # Prompt for save location
+        default_name = f"OCRMill_Invoice_{month}.xlsx"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Billing Report",
+            default_name,
+            "Excel Files (*.xlsx);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Invoice"
+
+            # Define colors (OCRMill brand colors)
+            header_blue = "1E3C64"  # Dark blue
+            accent_color = "7C5CFF"  # Purple accent
+            light_bg = "F5F7FA"  # Light background
+            border_color = "D1D5DB"  # Light gray border
+
+            # Define borders
+            thin_border = Border(
+                left=Side(style='thin', color=border_color),
+                right=Side(style='thin', color=border_color),
+                top=Side(style='thin', color=border_color),
+                bottom=Side(style='thin', color=border_color)
+            )
+
+            # Set column widths
+            ws.column_dimensions['A'].width = 4
+            ws.column_dimensions['B'].width = 18
+            ws.column_dimensions['C'].width = 25
+            ws.column_dimensions['D'].width = 12
+            ws.column_dimensions['E'].width = 18
+            ws.column_dimensions['F'].width = 12
+            ws.column_dimensions['G'].width = 15
+            ws.column_dimensions['H'].width = 15
+
+            # Header section - Company info (right side)
+            ws.merge_cells('F2:H2')
+            ws['F2'] = company_name
+            ws['F2'].font = Font(size=14, bold=True, color=header_blue)
+            ws['F2'].alignment = Alignment(horizontal='right')
+
+            ws.merge_cells('F3:H3')
+            ws['F3'] = "www.processlogiclabs.com"
+            ws['F3'].font = Font(size=10, color="666666")
+            ws['F3'].alignment = Alignment(horizontal='right')
+
+            # Invoice title
+            ws.merge_cells('B8:H8')
+            ws['B8'] = "INVOICE"
+            ws['B8'].font = Font(size=24, bold=True, color=header_blue)
+            ws['B8'].alignment = Alignment(horizontal='center')
+
+            # Invoice details
+            row = 10
+            ws[f'B{row}'] = "Invoice Date:"
+            ws[f'C{row}'] = datetime.now().strftime("%B %d, %Y")
+            ws[f'C{row}'].font = Font(bold=True)
+
+            row += 1
+            ws[f'B{row}'] = "Invoice Period:"
+            ws[f'C{row}'] = datetime.strptime(month + "-01", "%Y-%m-%d").strftime("%B %Y")
+            ws[f'C{row}'].font = Font(bold=True)
+
+            row += 1
+            ws[f'B{row}'] = "Bill To:"
+            ws[f'C{row}'] = customer_name
+            ws[f'C{row}'].font = Font(bold=True)
+
+            # Summary section
+            row += 3
+            ws[f'B{row}'] = "SUMMARY"
+            ws[f'B{row}'].font = Font(size=14, bold=True, color=header_blue)
+
+            row += 1
+            ws[f'B{row}'] = "Total Exports"
+            ws[f'C{row}'] = summary['export_count']
+            ws[f'C{row}'].alignment = Alignment(horizontal='right')
+
+            row += 1
+            ws[f'B{row}'] = "Rate per Export"
+            ws[f'C{row}'] = f"${rate:.2f}"
+            ws[f'C{row}'].alignment = Alignment(horizontal='right')
+
+            row += 1
+            ws[f'B{row}'] = "Amount Due"
+            ws[f'B{row}'].font = Font(bold=True, size=12)
+            ws[f'C{row}'] = f"${amount_due:.2f}"
+            ws[f'C{row}'].font = Font(bold=True, size=12)
+            ws[f'C{row}'].alignment = Alignment(horizontal='right')
+            ws[f'C{row}'].fill = PatternFill(start_color=light_bg, end_color=light_bg, fill_type="solid")
+
+            # Details table
+            row += 3
+            headers = ["Date", "File Number", "File Name", "Lines", "Value", "User"]
+            for col_idx, header in enumerate(headers, start=2):
+                cell = ws.cell(row=row, column=col_idx, value=header)
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color=header_blue, end_color=header_blue, fill_type="solid")
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal='center')
+
+            # Data rows
+            for record in summary['records']:
+                row += 1
+                ws.cell(row=row, column=2, value=record.get('export_date', '')).border = thin_border
+                ws.cell(row=row, column=3, value=record.get('file_number', '')).border = thin_border
+                ws.cell(row=row, column=4, value=record.get('file_name', '')).border = thin_border
+                ws.cell(row=row, column=5, value=record.get('line_count', 0)).border = thin_border
+                ws.cell(row=row, column=6, value=f"${record.get('total_value', 0):,.2f}").border = thin_border
+                ws.cell(row=row, column=7, value=record.get('user_name', '')).border = thin_border
+
+            # Save
+            wb.save(file_path)
+            QMessageBox.information(self, "Success", f"Billing report saved to:\n{file_path}")
+
+        except ImportError:
+            QMessageBox.critical(self, "Missing Library",
+                "openpyxl library is required for Excel export.\nInstall it with: pip install openpyxl")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate report:\n{str(e)}")
+            logger.error(f"Billing report generation failed: {e}", exc_info=True)
+
+    def _send_billing_invoice(self, month: str):
+        """Send billing invoice email with PDF attachment for the specified month."""
+        customer_email = self._get_billing_setting('customer_email', '')
+        admin_email = self._get_billing_setting('admin_email', '')
+        smtp_server = self._get_billing_setting('smtp_server', '')
+        smtp_port = int(self._get_billing_setting('smtp_port', '587'))
+        smtp_user = self._get_billing_setting('smtp_user', '')
+        smtp_password = self._get_billing_setting('smtp_password', '')
+
+        if not all([customer_email, admin_email, smtp_server, smtp_user, smtp_password]):
+            QMessageBox.warning(self, "Missing Settings",
+                "Please configure email settings in the Billing Configuration tab first.")
+            return
+
+        # Get summary
+        summary = self._get_billing_summary(month)
+        rate = float(self._get_billing_setting('rate_per_file', '0'))
+        amount_due = summary['export_count'] * rate
+
+        try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+
+            # Create email
+            msg = MIMEMultipart()
+            msg['From'] = smtp_user
+            msg['To'] = customer_email
+            msg['Cc'] = admin_email
+            msg['Subject'] = f"OCRMill Invoice - {datetime.strptime(month + '-01', '%Y-%m-%d').strftime('%B %Y')}"
+
+            # Email body
+            body = f"""Dear Customer,
+
+Please find below your OCRMill usage summary for {datetime.strptime(month + '-01', '%Y-%m-%d').strftime('%B %Y')}:
+
+Total Exports: {summary['export_count']}
+Total Lines Processed: {summary['total_lines']:,}
+Total Value Processed: ${summary['total_value']:,.2f}
+Rate per Export: ${rate:.2f}
+
+Amount Due: ${amount_due:.2f}
+
+Thank you for using OCRMill!
+
+Best regards,
+Process Logic Labs, LLC
+"""
+            msg.attach(MIMEText(body, 'plain'))
+
+            # Send email
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+            server.quit()
+
+            QMessageBox.information(self, "Email Sent",
+                f"Invoice for {month} sent successfully to {customer_email}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Email Failed",
+                f"Failed to send invoice:\n{str(e)}")
+            logger.error(f"Failed to send billing invoice: {e}", exc_info=True)
 
     # =========================================================================
     # AUDIT LOG TAB
