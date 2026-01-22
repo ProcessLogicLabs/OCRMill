@@ -41,7 +41,7 @@ from licensing.auth_manager import AuthenticationManager
 
 
 # Application version
-VERSION = "0.99.14"
+VERSION = "0.99.15"
 
 
 class OCRMillMainWindow(QMainWindow):

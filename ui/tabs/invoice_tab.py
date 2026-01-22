@@ -685,6 +685,12 @@ class InvoiceProcessingTab(QWidget):
         self.process_now_btn.clicked.connect(self.process_now)
         actions_layout.addWidget(self.process_now_btn)
 
+        # Section 232 Export button
+        self.section232_btn = QPushButton("Section 232 Export")
+        self.section232_btn.setToolTip("Generate Section 232 Steel/Aluminum Declaration export from processed CSVs")
+        self.section232_btn.clicked.connect(self.run_section232_export)
+        actions_layout.addWidget(self.section232_btn)
+
         # Separator line
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
@@ -1294,6 +1300,53 @@ class InvoiceProcessingTab(QWidget):
             self._log("CBP exporter module not available")
         except Exception as e:
             self._log(f"CBP export error: {e}")
+
+    @pyqtSlot()
+    def run_section232_export(self):
+        """Run Section 232 Steel/Aluminum Declaration export process."""
+        try:
+            from section232_exporter import Section232Exporter
+
+            # Use output/Processed as input for Section 232 export
+            input_folder = Path(self.config.output_folder) / "Processed"
+            output_folder = Path(self.config.output_folder) / "Section232_Export"
+            db_path = self.config.database_path
+
+            if not input_folder.exists() or not list(input_folder.glob("*.csv")):
+                self._log("No processed CSV files found for Section 232 export")
+                QMessageBox.information(
+                    self,
+                    "No Files",
+                    f"No CSV files found in {input_folder}\n\nPlease process some invoices first."
+                )
+                return
+
+            self._log("Running Section 232 export...")
+            exporter = Section232Exporter(input_folder, output_folder, db_path)
+            count = exporter.process_all()
+            self._log(f"Section 232 export complete: {count} files processed")
+            self._log(f"Output: {output_folder}")
+
+            # Show success message
+            QMessageBox.information(
+                self,
+                "Export Complete",
+                f"Section 232 export complete!\n\n{count} file(s) processed\nOutput: {output_folder}"
+            )
+        except ImportError as e:
+            self._log(f"Section 232 exporter module error: {e}")
+            QMessageBox.critical(
+                self,
+                "Module Error",
+                f"Section 232 exporter module not available:\n{e}"
+            )
+        except Exception as e:
+            self._log(f"Section 232 export error: {e}")
+            QMessageBox.critical(
+                self,
+                "Export Error",
+                f"Section 232 export failed:\n{e}"
+            )
 
     # ----- File handling -----
 
