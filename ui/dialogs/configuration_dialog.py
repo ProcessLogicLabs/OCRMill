@@ -749,7 +749,6 @@ class ConfigurationDialog(QDialog):
                 self.output_profiles = json.loads(OUTPUT_PROFILES_FILE.read_text())
                 for name in self.output_profiles.keys():
                     self.output_profile_combo.addItem(name)
-                    self.linked_export_combo.addItem(name)
         except Exception as e:
             print(f"Error loading output profiles: {e}")
 
@@ -812,7 +811,7 @@ class ConfigurationDialog(QDialog):
 
     def _clear_profile_link(self):
         """Clear the profile link."""
-        self.linked_export_combo.setCurrentIndex(0)
+        pass  # No linked combo in this dialog
 
     # ========== OUTPUT MAPPING HANDLERS ==========
 
@@ -856,7 +855,6 @@ class ConfigurationDialog(QDialog):
         self._save_current_output_profile(name)
         if name not in [self.output_profile_combo.itemText(i) for i in range(self.output_profile_combo.count())]:
             self.output_profile_combo.addItem(name)
-            self.linked_export_combo.addItem(name)
 
         QMessageBox.information(self, "Saved", f"Profile '{name}' saved successfully")
 
@@ -891,9 +889,6 @@ class ConfigurationDialog(QDialog):
             idx = self.output_profile_combo.findText(name)
             if idx >= 0:
                 self.output_profile_combo.removeItem(idx)
-            idx = self.linked_export_combo.findText(name)
-            if idx >= 0:
-                self.linked_export_combo.removeItem(idx)
 
     def _save_current_output_profile(self, name: str):
         """Save current output settings to a profile."""
